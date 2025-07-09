@@ -36,7 +36,7 @@ def dnmdt(t, q, parameters):
     op = parameters['op']
     if parameters['em_ini'] == 0.0:
         eccm = 0.0
-    else:
+    elif parameters['em_ini'] != 0.0:
         eccm = parameters['eccm']
 
     # Secondary properties
@@ -48,7 +48,7 @@ def dnmdt(t, q, parameters):
 
     epsilon = op / omegaCritic(Mp, Rp)
     # beta=alpha2beta(Mp,alpha,**args)
-    if not args['planet_internal_evolution']:
+    if not args['planet_envelope_dissipation']:
         k2q_planet = args['planet_k2q']
     else:
         k2q_planet_core = 0.0
@@ -60,7 +60,7 @@ def dnmdt(t, q, parameters):
     if parameters['em_ini'] == 0.0:
         dnmdt = (-9. / 2 * k2q_planet * Mm * Rp**5 / (GCONST**(5. / 3) * Mp**(8. / 3))
                  * nm**(16. / 3) * np.sign(op - nm))
-    else:
+    elif parameters['em_ini'] != 0.0:
         dnmdt = 9. * nm**(16. / 3.) * k2q_planet * Mm * Rp**5. / (Mp * (GCONST * (Mp + Mm))**(5. / 3.)) *\
             ((1. + 23. * eccm**2.) - (1. + 13.5 * eccm**2.) * op / nm)
 
@@ -103,7 +103,7 @@ def demdt(t, q, parameters):
 
     epsilon = op / omegaCritic(Mp, Rp)
     # beta=alpha2beta(Mp,alpha,**args)
-    if not args['planet_internal_evolution']:
+    if not args['planet_envelope_dissipation']:
         k2q_planet = args['planet_k2q']
     else:
         k2q_planet_core = 0.0
@@ -155,7 +155,7 @@ def dopdt(t, q, parameters):
 
     epsilon = op / omegaCritic(Mp, Rp)
     # beta=alpha2beta(Mp,alpha,**args)
-    if args['planet_internal_evolution']:
+    if args['planet_envelope_dissipation']:
         k2q_planet = args['planet_k2q']
     else:
         k2q_planet_core = 0.0
@@ -209,7 +209,7 @@ def dnpdt(t, q, parameters):
 
     epsilon = op / omegaCritic(Mp, Rp)
     # beta=alpha2beta(Mp,alpha,**args)
-    if not args['planet_internal_evolution']:
+    if not args['planet_envelope_dissipation']:
         k2q_planet = args['planet_k2q']
     else:
         k2q_planet_core = 0.0
@@ -246,17 +246,18 @@ def solution_planet_moon(t, q, parameters):
         eccm = q[3]
         parameters['eccm'] = eccm
 
-    parameters['nm'] = nm
     parameters['op'] = op
     parameters['npp'] = npp
+    parameters['nm'] = nm
 
     dopdtp = dopdt(t, [op], parameters)
     dnpdtp = dnpdt(t, [npp], parameters)
     dnmdtm = dnmdt(t, [nm], parameters)
 
-    solution = dopdtp + dnpdtp + dnmdtm
+    if parameters['em_ini'] == 0.0:
+        solution = dopdtp + dnpdtp + dnmdtm
 
-    if parameters['em_ini'] != 0.0:
+    elif parameters['em_ini'] != 0.0:
         demdtm = demdt(t, [eccm], parameters)
         solution = dopdtp + dnpdtp + dnmdtm + demdtm
 

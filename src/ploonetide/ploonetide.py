@@ -10,10 +10,8 @@ import pyfiglet
 
 from pathlib import Path
 from tqdm.auto import tqdm
-import matplotlib.pyplot as plt
 
 from . import PACKAGEDIR
-from ploonetide.utils import make_rgb_colormap
 from ploonetide.utils.constants import PLANETS
 from ploonetide.utils.functions import *
 from ploonetide.odes.planet_moon import solution_planet_moon
@@ -93,35 +91,65 @@ class TidalSimulation(Simulation):
         Lifespan of the star
     """
 
-    def __init__(self, activation_energy=3E5, heat_capacity=1260, mantle_thickness=3E6,
-                 melt_fraction_coeff=40., solidus_temperature=1600., breakdown_temperature=1800.,
-                 liquidus_temperature=2000., surface_temperature_earth=288., thermal_conductivity=2.,
-                 Rayleigh_critical=1100., flow_geometry=1., thermal_expansivity=1E-4,
-                 planet_size_evolution=False, planet_internal_evolution=False,
-                 planet_core_dissipation=False, star_internal_evolution=False, star_mass=1.,
-                 star_radius=1., star_eff_temperature=3700., star_saturation_rate=4.3421E-5,
-                 star_angular_coeff=0.5, star_rotperiod=10, star_alpha=0.25, star_beta=0.25,
-                 star_age=5., sun_omega=2.67E-6, sun_mass_loss_rate=1.4E-14, planet_mass=1.,
-                 planet_radius=None, planet_angular_coeff=0.26401, planet_orbperiod=None,
-                 planet_rotperiod=0.6, planet_eccentricity=0.1, planet_rigidity=4.46E10,
-                 planet_alpha=PLANETS.Jupiter.alpha, planet_beta=PLANETS.Jupiter.beta,
-                 moon_radius=1, moon_density=5515, moon_albedo=0.3, moon_eccentricity=0.02,
-                 moon_semimaxis=10, system='star-planet'):
+    def __init__(
+        self,
+        activation_energy=3E5,
+        heat_capacity=1260,
+        mantle_thickness=3E6,
+        melt_fraction_coeff=40.,
+        solidus_temperature=1600.,
+        breakdown_temperature=1800.,
+        liquidus_temperature=2000.,
+        surface_temperature_earth=288.,
+        thermal_conductivity=2.,
+        Rayleigh_critical=1100.,
+        flow_geometry=1.,
+        thermal_expansivity=1E-4,
+        planet_size_evolution=False,
+        planet_envelope_dissipation=False,
+        planet_core_dissipation=False,
+        star_internal_evolution=False,
+        star_mass=1.,
+        star_radius=1.,
+        star_eff_temperature=3700.,
+        star_saturation_rate=4.3421E-5,
+        star_angular_coeff=0.5,
+        star_rotperiod=10,
+        star_alpha=0.25,
+        star_beta=0.25,
+        star_age=5.,
+        sun_omega=2.67E-6,
+        sun_mass_loss_rate=1.4E-14,
+        planet_mass=1.,
+        planet_radius=None,
+        planet_angular_coeff=0.26401,
+        planet_orbperiod=None,
+        planet_rotperiod=0.6,
+        planet_eccentricity=0.1,
+        planet_rigidity=4.46E10,
+        planet_alpha=PLANETS.Saturn.alpha,
+        planet_beta=PLANETS.Saturn.beta,
+        moon_radius=1,
+        moon_density=5515, moon_albedo=0.3,
+        moon_eccentricity=0.02,
+        moon_semimaxis=10,
+        system='star-planet'
+    ):
         """Construct the class
 
         Args (and attributes):
             activation_energy (float, optional): Energy of activation, default is 3e5 [J mol^-1]
-            heat_capacity (int, optional): Heat capacity of moon material, default is 1260 [J kg^-1 K^-1]
-            mantle_thickness (float, optional): Thickness of the moon mantle, default is 3000000 [m]
-            melt_fraction_coeff (int, optional): Coefficient for melt fraction, default is 25 [No unit]
-            solidus_temperature (int, optional): Temperature for solid material, default is 1600 [K]
-            breakdown_temperature (int, optional): Temperature of breakdown from solid to liquidus, default is 1800 [K]
-            liquidus_temperature (int, optional): Temperature for liquid material, default is 2000 [K]
+            heat_capacity (int, optional): Heat capacity of moon, default is 1260 [J kg^-1 K^-1]
+            mantle_thickness (float, optional): Thickness of the moon mantle, default 3000000 [m]
+            melt_fraction_coeff (int, optional): Melt fraction coefficient, default 25 [No unit]
+            solidus_temperature (int, optional): Temperature for solid material, default 1600 [K]
+            breakdown_temperature (int, optional): Breadown temperature from solid to liquidus, default 1800 [K]
+            liquidus_temperature (int, optional): Temperature for liquid material, default 2000 [K]
             surface_temperature_earth (float, optional): Averaged surface temperature of Earth [K]
             thermal_conductivity (int, optional): Description, default is 2 [W m^-1 K^-1]
             Rayleigh_critical (int, optional): Critical rayleigh number, default is 1100 [No unit]
             flow_geometry (int, optional): Constant for flow geometry [No unit]
-            thermal_expansivity (float, optional): Thermal expansivity of the moon, default is 1E-4 [K^-1]
+            thermal_expansivity (float, optional): Thermal expansivity of moon, default 1E-4 [K^-1]
             sun_mass_loss_rate (float, optional): Solar mass loss rate [Msun yr^-1]
             star_rotperiod (int, optional): Stellar rotation period [d]
             star_saturation_rate (float, optional): Star's saturation rotational rate [rad s^-1]
@@ -152,7 +180,7 @@ class TidalSimulation(Simulation):
         # KEY TO INCLIDE EVOLUTION
         # ************************************************************
         self._planet_size_evolution = planet_size_evolution
-        self._planet_internal_evolution = planet_internal_evolution
+        self._planet_envelope_dissipation = planet_envelope_dissipation
         self._planet_core_dissipation = planet_core_dissipation
         self._star_internal_evolution = star_internal_evolution
 
@@ -205,15 +233,19 @@ class TidalSimulation(Simulation):
         # ************************************************************
         self._moon_density = u.Quantity(moon_density, u.kg * u.m**-3)
         self._moon_radius = u.Quantity(moon_radius, u.Rearth)
+        self._moon_radius_set = u.Quantity(moon_radius, u.Rearth)
         self._moon_semimaxis = u.Quantity(moon_semimaxis * self.moon_roche_radius.value, u.m)
         self.moon_eccentricity = moon_eccentricity
         self.moon_albedo = moon_albedo
 
         # Arguments for including/excluding different effects
         self.args = dict(
-            star_internal_evolution=self._star_internal_evolution, star_k2q=self.star_k2q,
-            planet_internal_evolution=self._planet_internal_evolution, planet_k2q=self.planet_k2q,
-            planet_size_evolution=self._planet_size_evolution, Rp=self.planet_radius.to_value(u.m),
+            star_internal_evolution=self._star_internal_evolution,
+            star_k2q=self.star_k2q,
+            planet_envelope_dissipation=self._planet_envelope_dissipation,
+            planet_k2q=self.planet_k2q,
+            planet_size_evolution=self._planet_size_evolution,
+            Rp=self.planet_radius.to_value(u.m),
             planet_core_dissipation=self._planet_core_dissipation,
         )
 
@@ -228,13 +260,15 @@ class TidalSimulation(Simulation):
             mass_p = Variable('planet_mass', self.planet_mass.to_value(u.kg))
             initial_variables = [motion_p, omega_p, eccen_p, omega_s, mass_p]
 
-            print(f'\nStar mass: {self.star_mass:.3f}\n',
-                  f'Star radius: {self.star_radius:.3f}\n',
-                  f'Star rotation period: {self.star_rotperiod:.3f}\n',
-                  f'Planet orbital period: {self.planet_orbperiod:.3f}\n',
-                  f'Planet mass: {self.planet_mass:.3f}\n',
-                  f'Planet radius: {self.planet_radius:.3f}\n',
-                  f'Planet eccentricity: {self.planet_eccentricity:.4f}\n')
+            print(
+                f'\nStar mass: {self.star_mass:.3f}\n',
+                f'Star radius: {self.star_radius:.3f}\n',
+                f'Star rotation period: {self.star_rotperiod:.3f}\n',
+                f'Planet orbital period: {self.planet_orbperiod:.3f}\n',
+                f'Planet mass: {self.planet_mass:.3f}\n',
+                f'Planet radius: {self.planet_radius:.3f}\n',
+                f'Planet eccentricity: {self.planet_eccentricity:.4f}\n'
+            )
 
         elif self.system == 'planet-moon':
             omega_p = Variable('omega_planet', self.planet_omega.value)
@@ -245,18 +279,19 @@ class TidalSimulation(Simulation):
             if self.moon_eccentricity == 0.0:
                 initial_variables = [omega_p, motion_p, motion_m]
 
-            print(f'\nStar mass: {self.star_mass:.3f}\n',
-                  f'Star radius: {self.star_radius:.3f}\n',
-                  f'Star rotation period: {self.star_rotperiod:.3f}\n',
-                  f'Planet orbital period: {self.planet_orbperiod:.3f}\n',
-                  f'Planet mass: {self.planet_mass:.3f}\n',
-                  f'Planet radius: {self.planet_radius:.3f}\n',
-                  f'Planet eccentricity: {self.planet_eccentricity:.3f}\n',
-                  f'Moon density: {self.moon_density:.3f}\n',
-                  f'Moon radius: {self.moon_radius:.3f}\n',
-                  f'Moon eccentricity: {self.moon_eccentricity:.3f}\n',
-                  f'Moon semi-major axis: {moon_semimaxis:.3f} a_roche\n',
-                  f'Moon orbital period: {self.moon_orbperiod:.3f}')
+            print(
+                f'\nStar mass: {self.star_mass:.3f}\n',
+                f'Star radius: {self.star_radius:.3f}\n',
+                f'Star rotation period: {self.star_rotperiod:.3f}\n',
+                f'Planet orbital period: {self.planet_orbperiod:.3f}\n',
+                f'Planet mass: {self.planet_mass:.3f}\n',
+                f'Planet radius: {self.planet_radius:.3f}\n',
+                f'Planet eccentricity: {self.planet_eccentricity:.3f}\n',
+                f'Moon density: {self.moon_density:.3f}\n',
+                f'Moon radius: {self.moon_radius:.3f}\n',
+                f'Moon eccentricity: {self.moon_eccentricity:.3f}\n',
+                f'Moon semimajor axis: {moon_semimaxis:.3f} a_roche\n',
+                f'Moon orbital period: {self.moon_orbperiod:.3f}')
 
         super().__init__(variables=initial_variables)
 
@@ -264,28 +299,48 @@ class TidalSimulation(Simulation):
     def parameters(self):
         # Parameters dictionary of the simulation
         return dict(
-            Ms=self.star_mass.to_value(u.kg), Rs=self.star_radius.to_value(u.m),
-            Ls=self.star_luminosity.value, coeff_star=self.star_angular_coeff,
-            star_alpha=self.star_alpha, star_beta=self.star_beta,
-            os_saturation=self.star_saturation_rate.value, star_age=self.star_age.to_value(u.s),
-            coeff_planet=self.planet_angular_coeff, Mp=self.planet_mass.to_value(u.kg),
-            Rp=self.planet_radius.to_value(u.m), planet_alpha=self.planet_alpha,
-            planet_beta=self.planet_beta, rigidity=self.planet_rigidity.value,
-            E_act=self.activation_energy.value, B=self.melt_fraction_coeff,
-            T_solidus=self.solidus_temperature.value, T_breakdown=self.breakdown_temperature.value,
-            T_liquidus=self.liquidus_temperature.value, Cp=self.heat_capacity.value,
-            ktherm=self.thermal_conductivity.value, Rac=self.Rayleigh_critical,
-            a2=self.flow_geometry, alpha_exp=self.thermal_expansivity.value,
-            d_mantle=self.mantle_thickness.value, densm=self.moon_density.value,
-            Mm=self.moon_mass.value, Rm=self.moon_radius.to_value(u.m),
-            gravm=self.moon_gravity.value, nm_ini=self.moon_meanmo.value,
-            rigidm=self.moon_rigidity.value, em_ini=self.moon_eccentricity,
+            Ms=self.star_mass.to_value(u.kg),
+            Rs=self.star_radius.to_value(u.m),
+            Ls=self.star_luminosity.value,
+            coeff_star=self.star_angular_coeff,
+            star_alpha=self.star_alpha,
+            star_beta=self.star_beta,
+            os_saturation=self.star_saturation_rate.value,
+            star_age=self.star_age.to_value(u.s),
+            coeff_planet=self.planet_angular_coeff,
+            Mp=self.planet_mass.to_value(u.kg),
+            Rp=self.planet_radius.to_value(u.m),
+            planet_alpha=self.planet_alpha,
+            planet_beta=self.planet_beta,
+            rigidity=self.planet_rigidity.value,
+            E_act=self.activation_energy.value,
+            B=self.melt_fraction_coeff,
+            T_solidus=self.solidus_temperature.value,
+            T_breakdown=self.breakdown_temperature.value,
+            T_liquidus=self.liquidus_temperature.value,
+            Cp=self.heat_capacity.value,
+            ktherm=self.thermal_conductivity.value,
+            Rac=self.Rayleigh_critical,
+            a2=self.flow_geometry,
+            alpha_exp=self.thermal_expansivity.value,
+            d_mantle=self.mantle_thickness.value,
+            densm=self.moon_density.value,
+            Mm=self.moon_mass.value,
+            Rm=self.moon_radius.to_value(u.m),
+            gravm=self.moon_gravity.value,
+            nm_ini=self.moon_meanmo.value,
+            rigidm=self.moon_rigidity.value,
+            em_ini=self.moon_eccentricity,
             T_surface=self.surface_temperature_earth.value,
             sun_mass_loss_rate=self.sun_mass_loss_rate.to_value(u.kg * u.s**-1),
-            sun_omega=self.sun_omega.value, os_ini=self.star_omega.value,
-            np_ini=self.planet_meanmo.value, op_ini=self.planet_omega.value,
-            ep_ini=self.planet_eccentricity, mp_ini=self.planet_mass.to_value(u.kg),
-            Tm_ini=self.moon_temperature.value, args=self.args
+            sun_omega=self.sun_omega.value,
+            os_ini=self.star_omega.value,
+            np_ini=self.planet_meanmo.value,
+            op_ini=self.planet_omega.value,
+            ep_ini=self.planet_eccentricity,
+            mp_ini=self.planet_mass.to_value(u.kg),
+            Tm_ini=self.moon_temperature.value,
+            args=self.args
         )
 
     # **********************************************************************************************
@@ -467,7 +522,8 @@ class TidalSimulation(Simulation):
 
     @property
     def star_luminosity(self):
-        return u.Quantity(luminosity(self.star_radius.to_value(u.m), self.star_eff_temperature.value), u.W)
+        return u.Quantity(luminosity(self.star_radius.to_value(u.m),
+                                     self.star_eff_temperature.value), u.W)
 
     @star_luminosity.setter
     def star_luminosity(self, value):
@@ -492,7 +548,8 @@ class TidalSimulation(Simulation):
 
     @property
     def star_epsilon(self):
-        return self.star_omega.value / omegaCritic(self.star_mass.to_value(u.kg), self.star_radius.to_value(u.m))
+        return self.star_omega.value / omegaCritic(self.star_mass.to_value(u.kg),
+                                                   self.star_radius.to_value(u.m))
 
     @property
     def star_k2q(self):
@@ -604,12 +661,17 @@ class TidalSimulation(Simulation):
 
     @property
     def planet_roche_radius(self):
-        return u.Quantity(2.7 * (self.star_mass.to_value(u.kg) / self.planet_mass.to_value(u.kg))**(1. / 3.) * self.planet_radius.to_value(u.m), u.m).to(u.AU)  # Roche radius of the planet (Guillochon et. al 2011)
+        # Roche radius of the planet (Guillochon et. al 2011)
+        return u.Quantity(2.7 * (self.star_mass.to_value(u.kg)
+                                 / self.planet_mass.to_value(u.kg))**(1. / 3.)
+                          * self.planet_radius.to_value(u.m), u.m).to(u.AU)
 
     @property
     def planet_hill_radius(self):
-        return u.Quantity(hill_radius(self.planet_semimaxis.to_value(u.m), self.planet_eccentricity,
-                                      self.planet_mass.to_value(u.kg), self.star_mass.to_value(u.kg)), u.m)
+        return u.Quantity(hill_radius(self.planet_semimaxis.to_value(u.m),
+                                      self.planet_eccentricity,
+                                      self.planet_mass.to_value(u.kg),
+                                      self.star_mass.to_value(u.kg)), u.m)
 
     # **********************************************************************************************
     # ******************************** MOON PROPERTIES *********************************************
@@ -627,6 +689,9 @@ class TidalSimulation(Simulation):
         self._moon_radius = value
         if not isinstance(self._moon_radius, u.Quantity):
             self._moon_radius = u.Quantity(value, u.Rearth)
+
+    def reset_moon_radius(self):
+        self._moon_radius = self._moon_radius_set
 
     @property
     def moon_density(self):
@@ -655,28 +720,53 @@ class TidalSimulation(Simulation):
     @property
     def moon_mass(self):
         # Mass of the moon [kg]
-        return u.Quantity(self.moon_density.value * (4. / 3. * np.pi * self.moon_radius.to_value(u.m)**3.), u.kg)
+        return u.Quantity(
+            self.moon_density.value * (4. / 3. * np.pi * self.moon_radius.to_value(u.m)**3.),
+            u.kg
+        )
 
     @property
     def moon_roche_radius(self):
         # Roche radius of the moon [m]
-        return u.Quantity(aRoche_solid(self.planet_mass.to_value(u.kg), self.moon_mass.value, self.moon_radius.to_value(u.m)), u.m)
+        return u.Quantity(
+            aRoche_solid(
+                self.planet_mass.to_value(u.kg),
+                self.moon_mass.value,
+                self.moon_radius.to_value(u.m)
+            ),
+            u.m
+        )
 
     @property
     def moon_gravity(self):
         # Gravity of the moon [m s^-2]
-        return u.Quantity(gravity(self.moon_mass.to_value(u.kg), self.moon_radius.to_value(u.m)), u.m * u.s**-2)
+        return u.Quantity(
+            gravity(
+                self.moon_mass.to_value(u.kg),
+                self.moon_radius.to_value(u.m)
+            ),
+            u.m * u.s**-2
+        )
 
     @property
     def moon_rigidity(self):
         #  Rigidity of the moon [Pa --> kg * m^-1 * s^-2]
-        return u.Quantity(self.moon_density.value * self.moon_gravity.value * self.moon_radius.to_value(u.m), u.Pa)
+        return u.Quantity(
+            self.moon_density.value * self.moon_gravity.value * self.moon_radius.to_value(u.m),
+            u.Pa
+        )
 
     @property
     def moon_meanmo(self):
         # Mean motion of the moon [s^-1]
-        return u.Quantity(meanMotion(self.moon_semimaxis.value, self.planet_mass.to_value(u.kg),
-                                     self.moon_mass.to_value(u.kg)), u.s**-1)
+        return u.Quantity(
+            meanMotion(
+                self.moon_semimaxis.value,
+                self.planet_mass.to_value(u.kg),
+                self.moon_mass.to_value(u.kg)
+            ),
+            u.s**-1
+        )
 
     @property
     def moon_orbperiod(self):
@@ -686,8 +776,15 @@ class TidalSimulation(Simulation):
     @property
     def moon_temperature(self):
         # Equilibrium temperature of the moon [K]
-        return u.Quantity(equil_temp(self.star_eff_temperature.value, self.star_radius.to_value(u.m),
-                                     self.planet_semimaxis.to_value(u.m), self.moon_albedo), u.K)
+        return u.Quantity(
+            equil_temp(
+                self.star_eff_temperature.value,
+                self.star_radius.to_value(u.m),
+                self.planet_semimaxis.to_value(u.m),
+                self.moon_albedo
+            ),
+            u.K
+        )
 
     @classmethod
     def get_class_name(cls):
@@ -724,198 +821,133 @@ class TidalSimulation(Simulation):
         if self.system == 'planet-moon':
             times, solutions = self.history
 
-            moon_semi_ma = mean2axis(solutions[2], self.planet_mass.to_value('kg'),
-                                     self.moon_mass.value)
-
-            moon_fate = find_moon_fate(times, moon_semi_ma, self.moon_roche_radius.value,
-                                       self.planet_hill_radius.value,)
+            moon_fate = find_moon_fate(
+                times, self.star_mass.to_value(u.kg),
+                self.planet_mass.to_value(u.kg),
+                self.moon_mass.value,
+                solutions[2],
+                self.moon_roche_radius.value,
+                self.planet_hill_radius.value
+            )
 
             self.fate_time = moon_fate.time
+            self.fate = moon_fate.fate
 
-            self.history = pd.DataFrame({'Times': times[:moon_fate.index],
-                                         'Planet Omega': solutions[0][:moon_fate.index],
-                                         'Planet Mean Motion': solutions[1][:moon_fate.index],
-                                         'Moon Mean Motion': solutions[2][:moon_fate.index],
-                                         'Moon Semi-Major Axis': moon_semi_ma[:moon_fate.index],
-                                         'Moon Eccentricity': solutions[3][:moon_fate.index]})
+            moon_semi_ma = mean2axis(
+                solutions[2][:moon_fate.index],
+                self.planet_mass.to_value(u.kg),
+                self.moon_mass.value
+            )
 
+            if self.moon_eccentricity == 0.0:
+                self.history = pd.DataFrame(
+                    {'Times': times[:moon_fate.index],
+                     'Planet Omega': solutions[0][:moon_fate.index],
+                     'Planet Mean Motion': solutions[1][:moon_fate.index],
+                     'Moon Mean Motion': solutions[2][:moon_fate.index],
+                     'Moon Semimajor Axis': moon_semi_ma
+                     }
+                )
+            elif self.moon_eccentricity != 0.0:
+                self.history = pd.DataFrame(
+                    {'Times': times[:moon_fate.index],
+                     'Planet Omega': solutions[0][:moon_fate.index],
+                     'Planet Mean Motion': solutions[1][:moon_fate.index],
+                     'Moon Mean Motion': solutions[2][:moon_fate.index],
+                     'Moon Semimajor Axis': moon_semi_ma,
+                     'Moon Eccentricity': solutions[3][:moon_fate.index]}
+                )
             self.history.index.name = 'Simulation Step'
 
-            # header = [['Times', 'Planet Omega', 'Planet Mean Motion', 'Moon Mean Motion',
-            #            'Moon Semi-Major Axis', 'Moon Eccentricity', 'Moon Temperature'],
-            #           ['s', '1/s', '1/s', '1/s', 'm', 'none', 'K']]
-            # self.history.columns = header
+            self.history_units = {
+                'Times': u.s,
+                'Planet Omega': u.s**-1,
+                'Planet Mean Motion': u.s**-1,
+                'Moon Mean Motion': u.s**-1,
+                'Moon Semi-Major Axis': u.m,
+            }
+            if self.moon_eccentricity != 0.0:
+                self.history_units['Moon Eccentricity'] = u.Unit('')
+                self.history_units['Moon Surface Temperature'] = u.K
 
-    def compute_tidal_heat_flux(self):
-
+    def compute_moon_surface_temperature(self):
+        """Compute the surface temperature of the moon for each mean motion and eccentricity.
+        """
         if self.system == 'planet-moon':
             print('\nStarting integration of moon surface temperature down to the Roche limit:\n')
 
-            moon_tidal_flux = list()
-            for n, e in tqdm(zip(self.history['Moon Mean Motion'], self.history['Moon Eccentricity']),
-                             total=len(self.history['Times']), desc='Progress: ',
-                             bar_format=self.bar_format):
+            moon_surface_temperature = list()
+            for n, e in tqdm(
+                zip(self.history['Moon Mean Motion'], self.history['Moon Eccentricity']),
+                total=len(self.history['Times']),
+                desc='Computing moon surface temperature: ',
+                bar_format=self.bar_fmt
+            ):
 
+                T_stab = 0.0
                 T_stab = bisection(n, e, self.parameters)
 
-                flux, _ = tidal_heat(T_stab, n, e, self.parameters)
-
-                moon_tidal_flux.append(flux)
-
-            self.history['Moon Tidal Heat Flux'] = moon_tidal_flux
-
-        else:
-            print(f'\nMethod {self.compute_heat_flux.__name__} not defined for other systems')
-
-    def create_moon_temperature_map(self, periods=np.arange(0.1, 20.11, 0.4),
-                                    radii=np.arange(250, 6551, 1000), output_directory=Path.home(),
-                                    export_file=False):
-
-        output_directory = Path(output_directory, 'Temperature_Maps')
-        os.makedirs(output_directory, exist_ok=True)
-
-        if export_file:
-            file_name = Path(output_directory,
-                             f'temperature_map_e{self.moon_eccentricity}_ploonetide.txt')
-            file = open(file_name, 'w')
-
-        temps = list()
-
-        for p in periods:
-            P = p * DAY  # orbital period [s]
-            n = 2. * np.pi / P  # mean motion [1/s]
-
-            for r in radii:
-                self.moon_radius = r * 1000. / REARTH  # radius of the moon [m]
-
-                # a = 0
-                T_stab = 0
-                # flux = 0
-                # T_s = 0
-
-                T_stab = bisection(n, self.moon_eccentricity, self.parameters)
-
                 if T_stab > 0:
-
-                    flux, _ = tidal_heat(T_stab, n, self.moon_eccentricity, self.parameters)
+                    flux, _ = tidal_heat(T_stab, n, e, self.parameters)
                     T_s = surf_temp(flux)
 
                 elif T_stab <= 0:
                     T_s = T_stab
 
-                if export_file:
-                    file.write('%.4e %4.i %.2f\n' % (P / DAY, r, T_s))
+                moon_surface_temperature.append(T_s)
 
-                temps.append(tuple([p, r, T_s]))
+            self.history['Moon Surface Temperature'] = moon_surface_temperature
 
-        T_eq = np.array([column[2] for column in temps])
+        else:
+            print(f'\nMethod {self.compute_heat_flux.__name__} not defined for other systems')
 
-        # Create the meshgrid with the correct order of x and y
-        X, Y = np.meshgrid(radii, periods)
-        # Reshape the z-values to match the dimensions of the meshgrid
-        temperatures = T_eq.reshape(len(periods), len(radii))
+    def create_moon_temperature_map(
+        self,
+        periods=np.arange(0.1, 20.11, 0.04),
+        radii=np.arange(250, 6551, 1000),
+        min_temp=0.0,
+        max_temp=730,
+        output_directory=Path.home()
+    ):
 
-        fig, ax = plt.subplots(1, 1, figsize=(7.0, 5.0))
+        output_directory = Path(output_directory, 'Temperature_Maps')
+        os.makedirs(output_directory, exist_ok=True)
 
-        vmin = np.min(temperatures)
-        vmax = np.max(temperatures)
-        levels = np.linspace(vmin, vmax, 5000)
+        file_name = Path(output_directory, f'Temper_map_e{self.moon_eccentricity}_ploonetide.txt')
 
-        ax.set_xlabel('Moon Orbital Period (d)')
-        ax.set_ylabel('Moon Radius (km)')
-        ax.set_title(r'$\rho$ = $\rho_{\mathrm{Earth}}$, $e = 0.1$', fontsize=20)
-        ax.axis([np.min(periods), np.max(periods),
-                 np.min(radii), np.max(radii)])
+        with open(file_name, 'w') as file:
+            # Vary the orbitaal period of the moon
+            for i, period in enumerate(tqdm(periods, desc="Computing temperature map")):
+                period = period * DAY  # orbital period [s]
+                n = 2. * np.pi / period  # mean motion [1/s]
 
-        # Definition of all letter sizes
-        font = {'weight': 'normal', 'size': 18}
-        plt.rc('font', **font)  # A fent definialt betumeret hasznalata
+                # Vary the moon radius
+                for j, radius in enumerate(radii):
+                    # The rigidity and surface gravity of the moon also change automatically through
+                    # the instance 'parameters' of the TidalSimulation class
+                    self.moon_radius = radius * 1000. / REARTH  # Moon radius [m]
 
-        wbgr = make_rgb_colormap()
+                    # Calculate the stability tmperature of the moon
+                    T_stab = 0
+                    T_stab = bisection(n, self.moon_eccentricity, self.parameters)
 
-        im = ax.contourf(Y, X, temperatures, levels=levels, cmap=wbgr)
+                    # Calculate the tidal heating of the moon and its surface temperature
+                    if T_stab > 0:
+                        flux, _ = tidal_heat(T_stab, n, self.moon_eccentricity, self.parameters)
+                        T_s = surf_temp(flux)
 
-        # Add a colorbar for the image
-        cbar = fig.colorbar(im, ax=ax, format="%.0f")
-        cbar.set_label('Surface Temperature (K)')
-        cbar.set_ticks(np.linspace(vmin, vmax, 10))
-        cbar.minorticks_on()
+                    elif T_stab <= 0:
+                        T_s = T_stab
 
-        levels = (273.0, 373.0)
-        ct = ax.contour(Y, X, temperatures, levels, origin='lower', linewidths=1, colors=('k', 'k'))
-        ax.clabel(ct, colors='k', inline=True, fmt='%1.f', fontsize=12, inline_spacing=12)
+                    file.write('%.4e %4.i %.2f\n' % (period / DAY, radius, T_s))
 
-        # ax.plot(2.06, 6370., 'wo')
-        # ax.text(1.9, 6000., r'Exo-Earth', fontsize=18, color='white')
+        # Reset the moon radius to the original value defined at the beginning of the simulation
+        self.reset_moon_radius()
 
-        fig.tight_layout()
-
-        image_name = Path(output_directory, f'temperature_map_e{self.moon_eccentricity}.png')
-        fig.savefig(image_name, facecolor='w', dpi=300)
-
-    def create_moon_temperature_map_from_file(self, file=None):
-
-        data = np.loadtxt(file)
-
-        '''
-        # Find the dimension of the periods
-        second_column = data[:, 1]
-        unique_values, unique_counts = np.unique(second_column, return_counts=True)
-        # Find the index where the count of unique values is maximized
-        max_count_index = np.argmax(unique_counts)
-        # Repeating pattern length is the count of the most frequent unique value
-        repeating_length = unique_counts[max_count_index]
-        len_periods = repeating_length'''
-
-        # Extract the periods, radii, and temperatures
-        periods_vector = data[:, 0]
-        radii_vector = data[:, 1]
-        T_eq = data[:, 2]
-
-        # Determine the unique values in the x and y columns
-        unique_periods = np.unique(radii_vector)
-        unique_radii = np.unique(periods_vector)
-
-        # Create the meshgrid with the correct order of x and y
-        X, Y = np.meshgrid(unique_periods, unique_radii)
-        # Reshape the z-values to match the dimensions of the meshgrid
-        temperatures = T_eq.reshape(len(unique_radii), len(unique_periods))
-
-        fig, ax = plt.subplots(1, 1, figsize=(7.0, 5.0))
-
-        vmin = 0.0  # np.min(temperatures)
-        vmax = 730  # np.max(temperatures)
-        levels = np.linspace(vmin, vmax, 5000)
-
-        ax.set_xlabel('Moon Orbital Period (d)')
-        ax.set_ylabel('Moon Radius (km)')
-        ax.set_title(r'$\rho$ = $\rho_{\mathrm{Earth}}$, $e = 0.1$', fontsize=20)
-        ax.axis([np.min(periods_vector), np.max(periods_vector),
-                 np.min(radii_vector), np.max(radii_vector)])
-
-        # Definition of all letter sizes
-        font = {'weight': 'normal', 'size': 18}
-        plt.rc('font', **font)  # A fent definialt betumeret hasznalata
-
-        wbgr = make_rgb_colormap()
-
-        im = ax.contourf(Y, X, temperatures, levels=levels, cmap=wbgr)
-
-        # Add a colorbar for the image
-        cbar = fig.colorbar(im, ax=ax, format="%.0f")
-        cbar.set_label('Surface Temperature (K)')
-        cbar.set_ticks(np.linspace(vmin, vmax, 10))
-        cbar.minorticks_on()
-
-        levels = (273.0, 373.0)
-        ct = ax.contour(Y, X, temperatures, levels, origin='lower', linewidths=1, colors=('k', 'k'))
-        ax.clabel(ct, colors='k', inline=True, fmt='%1.f', fontsize=12, inline_spacing=12)
-
-        # ax.plot(2.06, 6370., 'wo')
-        # ax.text(1.9, 6000., r'Exo-Earth', fontsize=18, color='white')
-
-        fig.tight_layout()
-
-        image_name = os.path.join(os.path.dirname(file),
-                                  f'temperature_map_e{self.moon_eccentricity}.png')
-        fig.savefig(image_name, facecolor='w', dpi=300)
+        # Now, we plot the temperature mac using the plot_moon_tmperature_map of Ploonetide
+        plot_moon_temperature_map(
+            file_name,
+            moon_eccentricity=self.moon_eccentricity,
+            min_temp=min_temp,
+            max_temp=max_temp
+        )

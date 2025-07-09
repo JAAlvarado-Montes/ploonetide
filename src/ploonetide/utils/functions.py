@@ -1,9 +1,13 @@
+"""This module contains all the general functions needed for Ploonetide calculations"""
+import os
 import numpy as np
 import astropy.units as u
+import matplotlib.pyplot as plt
 
 from collections import namedtuple
 
 from ploonetide.utils.constants import *
+from ploonetide.utils import make_rgb_colormap
 
 
 #############################################################
@@ -329,31 +333,37 @@ def power(ee, aa, KQ, Ms, Rp):
 # ###################DOBS-DIXON 2004#######################
 
 
-def find_moon_fate(t, am, am_roche, ap_hill):
+def find_moon_fate(t, Ms, Mp, Mm, nm, am_roche, ap_hill):
+
+    nm_roche = meanMotion(am_roche, Mp, Mm)
+    np_hill = meanMotion(ap_hill, Ms, Mp)
+
+    scale = GYEAR
+    scale_label = 'Gyr'
+
+    if scale != GYEAR:
+        scale_label = 'Myr'
+
     try:
-        pos = np.where(am <= am_roche)[0][0]
-        rt_time = t[pos] / MYEAR
-        label = 'crosses'
-        print(f'Moon {label} the Roche limit in {rt_time:.6f} Myr')
+        pos = np.where(nm >= nm_roche)[0][0]
+        rt_time = t[pos] / scale
+        fate = 'crosses'
+        print(f'Moon {fate} the Roche limit in {rt_time:.6f} {scale_label}')
     except IndexError:
         try:
-            pos = np.where(am >= ap_hill)[0][0]
-            rt_time = t[pos] / MYEAR
-            label = 'escapes'
-            print(f'Moon {label} from the planetary Hill radius in {rt_time:.6f} Myr')
+            pos = np.where(nm <= np_hill)[0][0]
+            rt_time = t[pos] / scale
+            fate = 'escapes'
+            print(f'Moon {fate} from the planetary Hill radius in {rt_time:.6f} {scale_label}')
         except IndexError:
             pos = -1
-            rt_time = np.max(t) / MYEAR
-            label = "stalls"
-            print('Moon migrates too slow and never escapes the Hill radius or crosses the Roche limit.')
+            rt_time = np.max(t) / scale
+            fate = "stalls"
+            print('Moon migrates too slow and never crosses the Hill radius or the Roche limit.')
 
-    Outputs = namedtuple('Outputs', 'time index label')
+    Outputs = namedtuple('Outputs', 'time index fate')
 
-    return Outputs(rt_time, pos, label)
-
-
-# def cross_roche_limit(t, y):
-#     return meanMotion()
+    return Outputs(rt_time, pos, fate)
 
 
 def mu_below_T_solidus():
@@ -368,6 +378,7 @@ def eta_o(E_act):
     # eta_set = 1e19 # defining viscosity for Mars at T0 = 1600K [Pa*s] (Shoji & Kurita 2014)
     T0 = 1000.  # defining temperature
     return eta_set / np.exp(E_act / (gas_constant * T0))
+
 
 def eta_below_T_solidus(T, E_act):
 
@@ -815,3 +826,282 @@ def bisection(nm, eccm, parameters):
 
     print(T_equilibrium)
     return T_equilibrium
+
+
+def plot_moon_temperature_map(
+    file,
+    moon_eccentricity=None,
+    min_temp=0.0,
+    max_temp=730
+):
+
+    # Definition of all letter sizes
+    font = {'weight': 'normal', 'size': 15}
+    plt.rc('font', **font)  # A fent definialt betumeret hasznalata
+
+    data = np.loadtxt(file)
+
+    # Extract the periods, radii, and temperatures
+    periods_vector = data[:, 0]
+    radii_vector = data[:, 1]
+    T_eq = data[:, 2]
+
+    # Determine the unique values in the x and y columns
+    unique_periods = np.unique(periods_vector)
+    unique_radii = np.unique(radii_vector)
+
+    # Create the meshgrid with the correct order of x and y
+    X, Y = np.meshgrid(unique_radii, unique_periods)
+    # Reshape the z-values to match the dimensions of the meshgrid
+    temperatures = T_eq.reshape(len(unique_periods), len(unique_radii))
+
+    fig, ax = plt.subplots(1, 1, figsize=(7.0, 5.0))
+
+    vmin = min_temp
+    vmax = max_temp
+    levels = np.linspace(vmin, vmax, 5000)
+
+    ax.set_xlabel('Moon Orbital Period (d)')
+    ax.set_ylabel('Moon Radius (km)')
+    ax.set_title(r'$\rho$ = $\rho_\mathrm{Earth}$'fr', $e$ = {moon_eccentricity}', fontsize=17)
+    ax.axis([np.min(unique_periods), np.max(unique_periods),
+             np.min(unique_radii), np.max(unique_radii)])
+
+    wbgr = make_rgb_colormap()
+
+    im = ax.contourf(Y, X, temperatures, levels=levels, cmap=wbgr)
+
+    # Add a colorbar for the image
+    cbar = fig.colorbar(im, ax=ax, format="%.0f")
+    cbar.set_label('Surface Temperature (K)')
+    cbar.set_ticks(np.linspace(vmin, vmax, 10))
+    cbar.minorticks_on()
+
+    levels = (273.0, 373.0)
+    ct = ax.contour(Y, X, temperatures, levels, origin='lower', linewidths=1, colors=('w', 'w'))
+    ax.clabel(ct, colors='w', inline=True, fmt='%1.f', fontsize=15, inline_spacing=12)
+
+    # ax.plot(2.06, 6370., 'wo')
+    # ax.text(1.9, 6000., r'Exo-Earth', fontsize=18, color='white')
+
+    fig.tight_layout()
+
+    image_name = os.path.join(os.path.dirname(file), f'temperature_map_e{moon_eccentricity}.png')
+    fig.savefig(image_name, facecolor='w', dpi=300)
+
+
+def f_s(e_sp, i, omega, phi_sp, phi_pm, lon, lat):
+    """
+    Defines the irradiation from the star [W/m**2] as a function of longitude d and latitude l [deg]
+    """
+    a_pm = A_pm[0] * R_p
+    t = phi_sp * P_sp
+    i = i * pi / 180.
+    omega = omega * pi / 180.
+    lon = lon * pi / 180.
+    lat = lat * pi / 180.
+
+    # [s],   orbital period of the planet-moon system
+    P_pm = 2. * pi * np.sqrt(a_pm**3 / (G * (M_p + M_m)))
+    M_sp = 2. * pi / P_sp * (t - tau)                      # [rad], mean anomaly
+
+    # iterate eccentric anomaly
+    delta = 10.**10
+    accur = 10.**(-5.)
+    E_sp = M_sp
+    while np.abs(delta) > accur:
+        E_tmp = M_sp + e_sp * np.sin(E_sp)
+        delta = np.abs(E_tmp - E_sp)
+        E_sp = E_tmp
+
+    # Surface normal with length a_pm of the point at (lon,lat) on the moon; by neglecting the mean
+    # anomaly M_sp in the cos/np.sin(phi_pm...) terms the moon always starts at the left around
+    # the planet
+    n_x = a_pm * (-np.sin(lat) * np.sin(i) * np.cos(omega)
+                  + np.cos(lat) * (np.cos(omega) * np.cos(2 * pi * phi_pm + lon) * np.cos(i)
+                                   - np.sin(omega) * np.sin(2 * pi * phi_pm + lon)))
+    n_y = a_pm * (-np.sin(lat) * np.sin(i) * np.sin(omega)
+                  + np.cos(lat) * (np.sin(omega) * np.cos(2 * pi * phi_pm + lon) * np.cos(i)
+                                   + np.cos(omega) * np.sin(2 * pi * phi_pm + lon)))
+    n_z = a_pm * (np.sin(lat) * np.cos(i) + np.cos(lat) * np.cos(2 * pi * phi_pm + lon) * np.sin(i))
+
+    # position of the sub-planetary point on the moon (lon=0=lat)
+    s_x = a_pm * (np.cos(omega) * np.cos(2. * pi * phi_pm)
+                  * np.cos(i) - np.sin(omega) * np.sin(2. * pi * phi_pm))
+    s_y = a_pm * (np.sin(omega) * np.cos(2. * pi * phi_pm)
+                  * np.cos(i) + np.cos(omega) * np.sin(2. * pi * phi_pm))
+    s_z = a_pm * np.cos(2. * pi * phi_pm) * np.sin(i)
+
+    # vector from the planet to the star
+    r_ps_x = -a_sp * (np.cos(E_sp) - e_sp)
+    r_ps_y = -a_sp * np.sqrt(1. - e_sp**2) * np.sin(E_sp)
+    r_ps_z = 0.
+    r_ps = np.sqrt(r_ps_x**2 + r_ps_y**2 + r_ps_z**2)
+
+    # vector from the moon to the star
+    r_ms_x = (r_ps_x + s_x)
+    r_ms_y = (r_ps_y + s_y)
+    r_ms_z = (r_ps_z + s_z)
+    r_ms = np.sqrt(r_ms_x**2 + r_ms_y**2 + r_ms_z**2)
+
+    # r_perp is perpendicular part of the moon's vector to the star. Eclipses occur (f_s = 0)
+    # while r_perp < R_p if s*r_ms > 0.
+    cos_Gamma = (r_ms_x * r_ps_x + r_ms_y * r_ps_y + r_ms_z * r_ps_z) / (r_ms * r_ps)
+    Gamma = np.arccos(cos_Gamma)
+    r_perp = np.sin(Gamma) * r_ms
+
+    flux_s = R_s**2. * sigma_SB * T_effs**4. / \
+        (r_ms**2) * (r_ms_x * n_x + r_ms_y * n_y + r_ms_z * n_z) / (r_ms * a_pm)
+    # In this case the star shines on the planet's back side.
+    flux_s[where(flux_s < 0)] = 0.
+
+    # Eclipse of the moon behind the planet
+    # angular radius of the stellar disk as seen from the moon
+    beta_s = 2. * arctan(R_s / (r_ps + a_pm))
+    # angular radius of the planetary disk as seen from the moon
+    beta_p = 2. * arctan(R_p / (a_pm))
+
+    # In this case the planet covers the whole stellar disk during eclipse.
+    if beta_p >= beta_s:
+        flux_s[[x for x in range(len(flux_s)) if r_perp[x]
+                < R_p and r_ms[x] > r_ps]] = 0
+    # In this case the planet covers only part of the stellar disk during eclipse.
+    else:
+        flux_s[[x for x in range(len(flux_s)) if r_perp[x]
+                < R_p and r_ms[x] > r_ps]] *= 1. - (beta_p / beta_s)**2.
+
+    return flux_s
+
+
+def f_t(e_sp, i, omega, phi_sp, phi_pm, lon, lat):
+    """
+    Defines the thermal irradiation from the planet [W/m**2]
+    """
+
+    a_pm = A_pm[0] * R_p
+    t = phi_sp * P_sp
+    # [s],   orbital period of the planet-moon system
+    P_pm = 2. * pi * np.sqrt(a_pm**3 / (G * (M_p + M_m)))
+    M_sp = 2. * pi / P_sp * (t - tau)                      # [rad], mean anomaly
+
+    # iterate eccentric anomaly
+    delta = 10.**10
+    accur = 10.**(-5.)
+    E_sp = M_sp
+    while np.abs(delta) > accur:
+        E_tmp = M_sp + e_sp * np.sin(E_sp)
+        delta = np.abs(E_tmp - E_sp)
+        E_sp = E_tmp
+
+    # [rad], true anomaly
+    nu_sp = np.arccos((np.cos(E_sp) - e_sp) / (1. - e_sp * np.cos(E_sp)))
+
+    # by neglecting the term 2*pi*(t_tau)/P_sp in the cos/np.sin(...lon) terms the moon always
+    # starts at the left around the planet
+    s_x = a_pm * (np.cos(omega * pi / 180.) * np.cos(2. * pi * (phi_pm))
+                  * np.cos(i * pi / 180.) - np.sin(omega * pi / 180.) * np.sin(2. * pi * (phi_pm)))
+    s_y = a_pm * (np.sin(omega * pi / 180.) * np.cos(2. * pi * (phi_pm))
+                  * np.cos(i * pi / 180.) + np.cos(omega * pi / 180.) * np.sin(2. * pi * (phi_pm)))
+    s_z = a_pm * np.cos(2. * pi * (phi_pm)) * np.sin(i * pi / 180.)
+
+    r_sp_x = -a_sp * (np.cos(E_sp) - e_sp)
+    r_sp_y = -a_sp * (np.sqrt(1. - e_sp**2) * np.sin(E_sp))
+    r_sp_z = 0.
+    r_sp = np.sqrt(r_sp_x**2 + r_sp_y**2 + r_sp_z**2)
+
+    # Compute surface temperatures on the bright (T_b) and on the dark (T_d) sides of the planet
+
+    # Surface temperature of the planet if it was in thermal equilibrium
+    T_eq = (T_effs**4 * (1 - alpha_p) * R_s**2. / (4. * r_sp**2))**(1. / 4)
+    # Array of temperatures to be investigated for the true surface temperature on the bright side
+    T_B = np.arange(T_eq, T_eq + dT, 1.)
+    # 4th order polynomial in T_B to be investigated for the 1st zero point > T_eq. This will be T_b
+    poly = T_B**4 + (T_B - dT)**4 - T_effs**4 * \
+        (1 - alpha_p) * R_s**2. / (2. * r_sp**2)
+
+    # Surface temperature on the bright side of the planet
+    T_b = T_B[where(poly > 0)[0][0]]
+    # Surface temperature on the dark side of the planet
+    T_d = T_b - dT
+
+    # otherwise the region is on the moon's antiplanetary hemisphere and receives no thermal flux
+    # from the planet
+    if np.abs(lon) < 90:
+        Phi = 2. * arctan(s_y / (np.sqrt(s_x**2 + s_y**2) + s_x))
+        Theta = pi / 2. - np.arccos(s_z / np.sqrt(s_x**2 + s_y**2 + s_z**2))
+        l = np.arccos(np.cos(Theta) * np.cos(Phi - nu_sp))
+        xi = 1. / 2 * (1. + np.cos(l))
+        flux_t = np.cos(lon * pi / 180.) * np.cos(lat * pi / 180.) * R_p**2. * \
+            sigma_SB / a_pm**2. * (T_b**4. * xi + T_d**4. * (1 - xi))
+    else:
+        flux_t = 0. * phi_pm
+
+    return flux_t
+
+
+def f_r(e_sp, i, omega, phi_sp, phi_pm, lon, lat):
+    """
+    Defines the stellar reflected light from the planet [W/m**2]
+    """
+    a_pm = A_pm[0] * R_p
+    t = phi_sp * P_sp
+    # [s],   orbital period of the planet-moon system
+    P_pm = 2. * pi * np.sqrt(a_pm**3 / (G * (M_p + M_m)))
+    M_sp = 2. * pi / P_sp * (t - tau)                      # [rad], mean anomaly
+
+    # iterate eccentric anomaly
+    delta = 10.**10
+    accur = 10.**(-3.)
+    E_sp = M_sp
+    while np.abs(delta) > accur:
+        E_tmp = M_sp + e_sp * np.sin(E_sp)
+        delta = np.abs(E_tmp - E_sp)
+        E_sp = E_tmp
+
+    # [rad], true anomaly
+    nu_sp = np.arccos((np.cos(E_sp) - e_sp) / (1. - e_sp * np.cos(E_sp)))
+
+    # by neglecting the term 2*pi*(t_tau)/P_sp in the cos/np.sin(...lon) terms the moon always
+    # starts at the left around the planet
+    s_x = a_pm * (np.cos(omega * pi / 180.) * np.cos(2. * pi * (phi_pm))
+                  * np.cos(i * pi / 180.) - np.sin(omega * pi / 180.) * np.sin(2. * pi * (phi_pm)))
+    s_y = a_pm * (np.sin(omega * pi / 180.) * np.cos(2. * pi * (phi_pm))
+                  * np.cos(i * pi / 180.) + np.cos(omega * pi / 180.) * np.sin(2. * pi * (phi_pm)))
+    s_z = a_pm * np.cos(2. * pi * (phi_pm)) * np.sin(i * pi / 180.)
+
+    r_sp_x = -a_sp * (np.cos(E_sp) - e_sp)
+    r_sp_y = -a_sp * (np.sqrt(1. - e_sp**2) * np.sin(E_sp))
+    r_sp_z = 0.
+    r_sp = np.sqrt(r_sp_x**2 + r_sp_y**2 + r_sp_z**2)
+
+    if np.abs(lon) < 90:
+        # otherwise the region is on the moon's antiplanetary hemisphere and receives no
+        # stellar-reflected flux from the planet
+        Phi = 2. * arctan(s_y / (np.sqrt(s_x**2 + s_y**2) + s_x))
+        Theta = pi / 2. - np.arccos(s_z / np.sqrt(s_x**2 + s_y**2 + s_z**2))
+        l = np.arccos(np.cos(Theta) * np.cos(Phi - nu_sp))
+        xi = 1. / 2 * (1. + np.cos(l))
+        flux_r = np.cos(lon * pi / 180.) * np.cos(lat * pi / 180.) * R_s**2. * sigma_SB * \
+            T_effs**4. / r_sp**2. * pi * R_p**2 * alpha_p / a_pm**2. * xi
+    else:
+        flux_r = 0. * phi_pm
+
+    return flux_r
+
+
+def f_m(e_sp, i, omega, phi_sp, phi_pm, lon, lat):
+    """
+    Defines the total flux on the moon.
+    """
+    flux_m = f_s(e_sp, i, omega, phi_sp, phi_pm, lon, lat) + f_t(e_sp, i, omega,
+                                                                 phi_sp, phi_pm, lon, lat) + f_r(e_sp, i, omega, phi_sp, phi_pm, lon, lat)
+
+    return flux_m
+
+
+def f_bar(e_sp, i, omega, phi_sp, phi_pm, lon, lat):
+    """
+    Defines the flux at a given LONG/LAT averaged over one satellite orbit around the planet
+    """
+    flux_bar = f_m(e_sp, i, omega, phi_sp, phi_pm, lon, lat).sum() / len(phi_pm)
+    return flux_bar

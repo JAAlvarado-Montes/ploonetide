@@ -8,121 +8,121 @@ from tqdm.auto import tqdm
 __all__ = ['Variable', 'Simulation']
 
 
-# monkey patching the ode solvers with a progress bar
+# === Monkey-patch OdeSolver to include tqdm progress bar ===
 
-# save the old methods - we still need them
-old_init = OdeSolver.__init__
-old_step = OdeSolver.step
+# Save original methods
+_original_init = OdeSolver.__init__
+_original_step = OdeSolver.step
 
-# define our own methods
-def new_init(self, fun, t0, y0, t_bound, vectorized=True, support_complex=False):
 
-    # define the progress bar
+# Define patched methods
+def _patched_init(self, fun, t0, y0, t_bound, vectorized=True, support_complex=False):
     bar_format = '{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} steps | {elapsed}<{remaining}'
-    self.pbar = tqdm(desc='Progress: ', bar_format=bar_format, total=t_bound - t0, initial=t0)
-    self.last_t = t0
+    self._pbar = tqdm(
+        desc='Computing orbital evolution: ',
+        bar_format=bar_format,
+        total=t_bound - t0,
+        initial=t0
+    )
+    self._last_t = t0
 
-    # call the old method - we still want to do the old things too!
-    old_init(self, fun, t0, y0, t_bound, vectorized, support_complex)
+    _original_init(self, fun, t0, y0, t_bound, vectorized, support_complex)
 
 
-def new_step(self):
-    # call the old method
-    old_step(self)
+def _patched_step(self):
+    _original_step(self)
 
-    # update the bar
-    tst = self.t - self.last_t
-    self.pbar.update(tst)
-    self.last_t = self.t
+    delta_t = self.t - self._last_t
+    self._pbar.update(delta_t)
+    self._last_t = self.t
 
-    # close the bar if the end is reached
     if self.t >= self.t_bound:
-        self.pbar.close()
+        self._pbar.close()
 
 
-# overwrite the old methods with our customized ones
-OdeSolver.__init__ = new_init
-OdeSolver.step = new_step
+# Apply patch
+OdeSolver.__init__ = _patched_init
+OdeSolver.step = _patched_step
 
+
+# === Variable and Simulation classes ===
 
 class Variable:
-    """Define a new variable for integration
+    """Define a new variable for integration.
 
     Args:
-        name (str): Name of a variable for integrating
-        v_ini (float): Value of a variable (or initial condition)
+        name (str): Name of the variable
+        v_ini (float): Initial value
     """
 
     def __init__(self, name, v_ini):
-
         self.name = name
         self.v_ini = v_ini
 
-        pass
-
-    def return_vec(self) -> np.array:
-
+    def return_vec(self) -> np.ndarray:
         return np.array([self.v_ini])
 
 
 class Simulation:
-    """Build a simulation.
+    """Build and run a simulation.
 
     Args:
-        variables (list): List of variables (or initial conditions)
+        variables (list): List of Variable instances
     """
 
     def __init__(self, variables):
         self.variables = variables
-        self.N_variables = len(self.variables)
-        self.Ndim = len(self.variables)
-        self.quant_vec = np.concatenate(np.array([var.return_vec()
-                                                  for var in self.variables]))
+        self.N_variables = len(variables)
+        self.Ndim = self.N_variables
+        self.quant_vec = np.concatenate([var.return_vec() for var in variables])
 
     def set_diff_eq(self, calc_diff_eqs, **kwargs):
         """
-        Method which assigns an external solver function as the diff-eq solver
-        for the integrator. For N-body or gravitational setups, this is the
-        function which calculates accelerations.
+        Set the differential equation function.
 
         Args:
-            calc_diff_eqs: A function which returns a [y] vector for RK4
-            **kwargs: Any additional inputs/hyperparameters the external function requires
+            calc_diff_eqs: Callable returning dy/dt
+            **kwargs: Additional arguments passed to the function
         """
-        self.diff_eq_kwargs = kwargs
         self.calc_diff_eqs = calc_diff_eqs
+        self.diff_eq_kwargs = kwargs
 
     def set_integration_method(self, method='RK45'):
-        """Define integration method for the simulation.
+        """
+        Set the integration method.
 
         Args:
-            method (str, optional): method to use ['RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA']
+            method (str): One of ['RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA']
         """
         self.integration_method = method
 
     def run(self, t, dt, t0=0.0):
-        """Run simulation for the given variables.
-
-        Params:
-            t (float): total time (in simulation units) to run the simulation. Can have units or not, just set has_units appropriately.
-            dt (float): timestep (in simulation units) to advance the simulation. Same as above
-            t0 (float, optional): set a non-zero start time to the simulation.
         """
+        Run the simulation.
 
-        t_span = np.array([0.000001, t])
-        tint = np.arange(t_span[0], t_span[1], dt)  # Vector for time
+        Args:
+            t (float): Final time
+            dt (float): Timestep
+            t0 (float): Initial time (default 0.0)
+        """
+        t_span = np.array([0.000001, t])  # Avoid t0=0 for stability
+        t_eval = np.arange(t_span[0], t_span[1], dt)
+
+        self.bar_fmt = '{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} steps | {elapsed}<{remaining}'
 
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+            warnings.simplefilter('ignore')
 
-            # sols = odeint(self.calc_diff_eqs, self.quant_vec, tint,
-            #               args=(self.diff_eq_kwargs,), mxstep=1000, mxordn=20)
-
-            # nsteps = int((t - t0) / dt)
-            # for i in tqdm(range(nsteps), desc='Progress: ', bar_format=fmt):
-            self.bar_format = '{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} steps | {elapsed}<{remaining}'
-
-            sols = solve_ivp(self.calc_diff_eqs, t_span, self.quant_vec, vectorized=True, rtol=1E-20, min_step=1e-6,
-                             method=self.integration_method, args=(self.diff_eq_kwargs,), t_eval=tint)
+            sols = solve_ivp(
+                self.calc_diff_eqs,
+                t_span,
+                self.quant_vec,
+                method=self.integration_method,
+                vectorized=True,
+                rtol=1e-20,
+                min_step=1e-6,
+                args=(self.diff_eq_kwargs,),
+                t_eval=t_eval
+            )
 
             self.history = sols.t, sols.y
