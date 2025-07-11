@@ -87,11 +87,23 @@ format: black isort
 check-format: ; $(CMD) black --check $(PYMODULE) $(TESTS)
 
 # ----------------------------
-# Version bumping
+# Versioning & releasing
 
-bump:        ; bumpver update --patch --tag-pattern "vMAJOR.MINOR.PATCH"
-bump-minor:  ; bumpver update --minor --tag-pattern "vMAJOR.MINOR.PATCH"
-bump-major:  ; bumpver update --major --tag-pattern "vMAJOR.MINOR.PATCH"
+## Bump patch version and tag Git as vX.Y.Z
+bump:
+	bumpver update --patch
+	git tag v$(shell bumpver show | grep current_version | awk '{print $$2}')
+
+## Bump minor version and tag Git as vX.Y.Z
+bump-minor:
+	bumpver update --minor
+	git tag v$(shell bumpver show | grep current_version | awk '{print $$2}')
+
+## Bump major version and tag Git as vX.Y.Z
+bump-major:
+	bumpver update --major
+	git tag v$(shell bumpver show | grep current_version | awk '{print $$2}')
+
 release:
 	@echo "Ready to push version: $(VERSION) → Tag: $(TAG)"
 	@read -p "Push release to GitHub (y/N)? " confirm && \
