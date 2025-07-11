@@ -7,7 +7,7 @@ Installation
 Create a virtual environment (Poetry or Conda)
 ----------------------------------------------
 
-ploonetide works with `Python 3.10 or above`_. You can set up your environment using **Poetry** (recommended) or **Conda**.
+ploonetide works with `Python 3.10 or above`. You can set up your environment using **Poetry** (recommended) or **Conda**.
 
 **Option 1: Poetry (recommended)**
 
