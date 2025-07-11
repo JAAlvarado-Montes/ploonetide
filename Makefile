@@ -92,29 +92,30 @@ check-format: ; $(CMD) black --check $(PYMODULE) $(TESTS)
 ## Bump patch version and tag Git as vX.Y.Z
 bump:
 	bumpver update --patch
-	git tag v$$(bumpver show | grep current_version | cut -d'"' -f2)
+	sh -c 'git tag v$$(bumpver show | grep current_version | cut -d'"'"'"' -f2)'
 
 ## Bump minor version and tag Git as vX.Y.Z
 bump-minor:
 	bumpver update --minor
-	git tag v$$(bumpver show | grep current_version | cut -d'"' -f2)
+	sh -c 'git tag v$$(bumpver show | grep current_version | cut -d'"'"'"' -f2)'
 
 ## Bump major version and tag Git as vX.Y.Z
 bump-major:
 	bumpver update --major
-	git tag v$$(bumpver show | grep current_version | cut -d'"' -f2)
+	sh -c 'git tag v$$(bumpver show | grep current_version | cut -d'"'"'"' -f2)'
 
 ## Push the new tag and commit to GitHub, after confirmation
 release:
-	@VERSION=$$(bumpver show | grep current_version | cut -d'"' -f2); \
-	TAG=v$$VERSION; \
-	echo "✅ Ready to push version: $$VERSION → Tag: $$TAG"; \
-	read -p "Push release to GitHub (y/N)? " confirm && \
-	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
-		git push origin && git push origin $$TAG; \
-	else \
-		echo "❌ Release aborted."; \
-	fi
+	sh -c '\
+		VERSION=$$(bumpver show | grep current_version | cut -d"\"" -f2); \
+		TAG=v$$VERSION; \
+		echo "✅ Ready to push version: $$VERSION → Tag: $$TAG"; \
+		read -p "Push release to GitHub (y/N)? " confirm && \
+		if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+			git push origin && git push origin $$TAG; \
+		else \
+			echo "❌ Release aborted."; \
+		fi'
 
 # ----------------------------
 # Maintenance
