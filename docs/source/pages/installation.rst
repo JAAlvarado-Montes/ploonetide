@@ -1,52 +1,52 @@
+
 .. _installation:
 
 Installation
 ============
 
-Create and activate an environment
-----------------------------------
+Create a virtual environment (Poetry or Conda)
+----------------------------------------------
+
+ploonetide works with `Python 3.10 or above`_. You can set up your environment using **Poetry** (recommended) or **Conda**.
 
 **Option 1: Poetry (recommended)**
 
-If you don't have Poetry, you can install it with:
+Install Poetry if you haven't already:
 
 .. code-block:: bash
 
    pip install --user poetry
 
-Then install and activate the environment:
+Then create and activate the virtual environment and install all dependencies:
 
 .. code-block:: bash
 
    make install
-   poetry shell
+
+This will:
+- Install Poetry (if missing)
+- Create and activate a dedicated virtual environment
+- Install ploonetide and all core/dev dependencies
 
 **Option 2: Conda**
 
-If you prefer using Conda, the same command will export an environment file and create the env:
+If you prefer Conda and have it installed:
 
 .. code-block:: bash
 
-   make install
+   conda env create -f conda_environment.yml
    conda activate ploonetide-env
-
-Install ploonetide and its dependencies
----------------------------------------
-
-After the environment is active, all dependencies and the package will be installed automatically. You can also manually install with:
-
-.. code-block:: bash
-
-   pip install -e .[dev]
 
 Testing your ploonetide installation
 ------------------------------------
 
-Once inside the environment, test your install:
+After activating your environment (Poetry or Conda), test the package:
 
 .. code-block:: python
 
    import ploonetide
    simulation = ploonetide.TidalSimulation()
 
-You should see a print statement.
+You should see a print statement from the simulation.
+
+.. _Python 3.10 or above: https://www.python.org/downloads/

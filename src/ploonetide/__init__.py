@@ -35,3 +35,4 @@ log = logging.getLogger(__name__)
 log.addHandler(logging.StreamHandler())
 
 from .ploonetide import *
+from .version import __version__
