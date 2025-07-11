@@ -4,7 +4,7 @@ on:
   push:
     # Trigger only on version tags like v1.2.3
     tags:
-      - 'v*.*.*'
+      - '*.*.*'
 
 jobs:
   build-and-publish:
