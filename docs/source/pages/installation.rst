@@ -48,5 +48,3 @@ After activating your environment (Poetry or Conda), test the package:
    simulation = ploonetide.TidalSimulation()
 
 You should see a print statement from the simulation.
-
-.. _Python 3.10 or above: https://www.python.org/downloads/
