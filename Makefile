@@ -88,26 +88,29 @@ check-format: ; $(CMD) black --check $(PYMODULE) $(TESTS)
 
 # ----------------------------
 # Versioning & releasing
-VERSION := $(shell bumpver show | grep current_version | cut -d'"' -f2)
-TAG := v$(VERSION)
 
 ## Bump patch version and tag Git as vX.Y.Z
 bump:
 	bumpver update --patch
-	git tag $(TAG)
+	$(eval VERSION := $(shell bumpver show | grep current_version | cut -d'"' -f2))
+	git tag v$(VERSION)
 
 ## Bump minor version and tag Git as vX.Y.Z
 bump-minor:
 	bumpver update --minor
-	git tag $(TAG)
+	$(eval VERSION := $(shell bumpver show | grep current_version | cut -d'"' -f2))
+	git tag v$(VERSION)
 
 ## Bump major version and tag Git as vX.Y.Z
 bump-major:
 	bumpver update --major
-	git tag $(TAG)
+	$(eval VERSION := $(shell bumpver show | grep current_version | cut -d'"' -f2))
+	git tag v$(VERSION)
 
-## Push tag and commits to GitHub
+## Push the new tag and commit to GitHub, after confirmation
 release:
+	$(eval VERSION := $(shell bumpver show | grep current_version | cut -d'"' -f2))
+	$(eval TAG := v$(VERSION))
 	@echo "✅ Ready to push version: $(VERSION) → Tag: $(TAG)"
 	@read -p "Push release to GitHub (y/N)? " confirm && \
 	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
