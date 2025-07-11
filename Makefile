@@ -11,7 +11,7 @@ CONDA := $(shell command -v conda 2>/dev/null)
 CMD := $(if $(POETRY),poetry run,python -m)
 INSTALL_CMD := $(if $(POETRY),poetry install --with dev --extras "dev",pip install -e .[dev])
 VERSION := $(shell grep '^current_version =' pyproject.toml | sed -E 's/.*"([^"]+)"/\1/')
-TAG := v$(VERSION)
+TAG := $(VERSION)
 
 .PHONY: all install shell env test pytest coverage flake8 black mypy isort \
         lint format check-format clean setup.py \
@@ -90,32 +90,27 @@ check-format: ; $(CMD) black --check $(PYMODULE) $(TESTS)
 # Versioning & releasing
 
 ## Bump patch version and tag Git as vX.Y.Z
-bump:
-	bumpver update --patch
-	sh -c 'git tag v$$(bumpver show | grep current_version | cut -d'"'"'"' -f2)'
+bump:		; bumpver update --patch
 
 ## Bump minor version and tag Git as vX.Y.Z
-bump-minor:
-	bumpver update --minor
-	sh -c 'git tag v$$(bumpver show | grep current_version | cut -d'"'"'"' -f2)'
+bump-minor:	; bumpver update --minor
 
 ## Bump major version and tag Git as vX.Y.Z
-bump-major:
-	bumpver update --major
-	sh -c 'git tag v$$(bumpver show | grep current_version | cut -d'"'"'"' -f2)'
+bump-major:	; bumpver update --major
 
 ## Push the new tag and commit to GitHub, after confirmation
 release:
-	sh -c '\
-		VERSION=$$(bumpver show | grep current_version | cut -d"\"" -f2); \
-		TAG=v$$VERSION; \
-		echo "✅ Ready to push version: $$VERSION → Tag: $$TAG"; \
-		read -p "Push release to GitHub (y/N)? " confirm && \
-		if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
-			git push origin && git push origin $$TAG; \
-		else \
-			echo "❌ Release aborted."; \
-		fi'
+	@echo "✅ Ready to push version: $(VERSION) → Tag: $(TAG)"
+	@if ! git rev-parse "$(TAG)" >/dev/null 2>&1; then \
+		echo "❌ Tag '$(TAG)' not found. Did you run make bump first?"; \
+		exit 1; \
+	fi
+	@read -p "Push release to GitHub (y/N)? " confirm && \
+	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+		git push origin && git push origin $(TAG); \
+	else \
+		echo "❌ Release aborted."; \
+	fi
 
 # ----------------------------
 # Maintenance
