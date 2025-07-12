@@ -9,7 +9,6 @@ The first step is to install **Ploonetide** and ensure it runs correctly.
 .. toctree::
    :maxdepth: 1
    :caption: Installation:
-   :glob:
 
    pages/installation
 
