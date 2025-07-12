@@ -31,6 +31,7 @@ release = main_ns['__version__']
 
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
@@ -95,7 +96,7 @@ nbsphinx_timeout = 300
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'alabaster'
 html_theme_options = {
     "external_links": [],
     "github_url": "https://github.com/JAAlvarado-Montes/ploonetide",
