@@ -34,4 +34,4 @@ You should see an informational message from the simulation.
 
 .. note::
 
-   If you're a developer looking to contribute or modify the source code, please refer to the :ref:`Developer Guide <developer_guide>` for full setup instructions.
+   If you're a developer looking to contribute or modify the source code, please refer to the `Developer Guide <developer_guide.rst>` for full setup instructions.
