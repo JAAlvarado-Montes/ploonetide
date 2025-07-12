@@ -44,11 +44,14 @@ install:
 			echo "👉 Run: poetry shell"; \
 			exit 0; \
 		elif [ "$$choice" = "2" ] && command -v conda >/dev/null 2>&1; then \
-			poetry export --with dev --extras "dev" --format=requirements.txt --without-hashes -o conda_requirements.txt; \
+			poetry export --with dev --extras "dev" --format=requirements.txt --without-hashes -o conda_requirements.txt || echo '[]' > conda_requirements.txt; \
 			echo "name: ploonetide-env\nchannels:\n  - conda-forge\n  - defaults\ndependencies:\n  - python=3.11\n  - pip\n  - pip:\n    - -r conda_requirements.txt" > conda_environment.yml; \
 			conda env create -f conda_environment.yml; \
-			echo "✅ Conda environment created."; \
-			echo "👉 Run: conda activate ploonetide-env"; \
+			echo "✅ Conda environment 'ploonetide-env' created."; \
+			echo "👉 Installing ploonetide and dev dependencies..."; \
+			conda run -n ploonetide-env pip install -e .[dev]; \
+			rm -f conda_requirements.txt conda_environment.yml; \
+			echo "✅ Environment ready. Run: conda activate ploonetide-env"; \
 			exit 0; \
 		else \
 			echo "⏭️ Skipping. Make sure to activate an environment manually."; \
@@ -116,7 +119,9 @@ release:
 # Maintenance
 
 clean:
-	rm -rf dist/ build/ *.egg-info .pytest_cache htmlcov conda_requirements.txt conda_environment.yml
+	rm -rf dist/ build/ *.egg-info .pytest_cache htmlcov \
+           conda_requirements.txt conda_environment.yml \
+           poetry.lock \
 
 setup.py: pyproject.toml
 	$(CMD) dephell deps convert

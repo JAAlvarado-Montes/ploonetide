@@ -93,6 +93,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Poetry files
+poetry.lock
+
 # Spyder project settings
 .spyderproject
 .spyproject
