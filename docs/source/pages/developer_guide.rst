@@ -1,4 +1,4 @@
-.. _devguide:
+.. _developer_guide:
 Developer Guide
 ===============
 
