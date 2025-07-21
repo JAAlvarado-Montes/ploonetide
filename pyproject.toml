@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ploonetide"
-version = "1.0.4"
+version = "1.0.5"
 description = "Calculate tidal interactions in planetary systems"
 authors = ["Jaime A. Alvarado-Montes <rasjaime@gmail.com>"]
 readme = "README.rst"
@@ -100,7 +100,7 @@ numpydoc = "^1.5"
 testpaths = ["tests", "src"]
 
 [tool.bumpver]
-current_version = "1.0.4"
+current_version = "1.0.5"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message  = "Bump version {old_version} -> {new_version}"
 commit = true
