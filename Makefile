@@ -16,7 +16,7 @@ TAG := $(VERSION)
 .PHONY: all install shell env test pytest coverage flake8 black mypy isort \
         lint format check-format clean setup.py \
         bump bump-minor bump-major release \
-        export-conda-env
+        export-conda-env docs  # ← added docs target here
 
 # ----------------------------
 # Installation & Environment Setup
@@ -118,10 +118,44 @@ release:
 # ----------------------------
 # Maintenance
 
-clean:
-	rm -rf dist/ build/ *.egg-info .pytest_cache htmlcov \
-           conda_requirements.txt conda_environment.yml \
-           poetry.lock \
+# Path configuration
+CMD := poetry run
+DOCS_DIR := docs
+SRC_DIR := src/ploonetide
+SOURCE_DIR := $(DOCS_DIR)/source
+PAGES_DIR := $(SOURCE_DIR)/pages
+API_DIR := $(PAGES_DIR)/api
+AUTOSUMMARY_DIR := $(SOURCE_DIR)/_autosummary
 
-setup.py: pyproject.toml
-	$(CMD) dephell deps convert
+clean:
+	rm -rf \
+		dist/ build/ *.egg-info .pytest_cache htmlcov \
+		conda_requirements.txt conda_environment.yml \
+		poetry.lock \
+		$(DOCS_DIR)/_build \
+		$(AUTOSUMMARY_DIR) \
+		$(AUTOSUMMARY_PAGES) \
+		$(API_DIR) \
+		**/__pycache__ \
+		**/*.py[cod] \
+		**/.ipynb_checkpoints \
+		*.log *.tmp
+
+# ----------------------------
+# Documentation
+
+docs:
+	@echo "🧹 Cleaning old autosummary and API files..."
+	rm -rf $(AUTOSUMMARY_DIR) $(API_DIR)
+
+	@echo "🌐 Starting live documentation server at http://127.0.0.1:8000"
+	@sh -c "sleep 5 && python -c 'import webbrowser; webbrowser.open(\"http://127.0.0.1:8000\")'" &
+
+	@echo "📦 Running sphinx-apidoc to generate API .rst files..."
+	@$(CMD) sphinx-apidoc -o $(SOURCE_DIR)/pages/api $(SRC_DIR) --force --separate
+
+	@echo "📄 Generating autosummary stubs for index.rst..."
+	@$(CMD) sphinx-autogen -o $(SOURCE_DIR)/_autosummary $(SOURCE_DIR)/index.rst
+
+	@echo "🔧 Building docs with sphinx-autobuild..."
+	@$(CMD) sphinx-autobuild $(SOURCE_DIR) docs/_build/html

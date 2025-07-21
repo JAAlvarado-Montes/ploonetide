@@ -5,9 +5,12 @@ import astropy.units as u
 import matplotlib.pyplot as plt
 
 from collections import namedtuple
+from typing import Union
 
 from ploonetide.utils.constants import *
 from ploonetide.utils import make_rgb_colormap
+
+ArrayLike = Union[float, np.ndarray]
 
 
 #############################################################
@@ -38,16 +41,22 @@ def k2Q_star_envelope(alpha, beta, epsilon):
     return k2q1
 
 
-def k2Q_planet_envelope(alpha, beta, epsilon):
-    """Calculate tidal heat function for the planet's envelope (Source: Mathis, 2015).
+def k2Q_planet_envelope(
+    alpha: ArrayLike,
+    beta: ArrayLike,
+    epsilon: ArrayLike
+) -> ArrayLike:
+    """
+    Calculate the tidal heat function of a planet's convective envelope (Source: Mathis, 2015).
+    Works with scalars or NumPy arrays.
 
-      Args:
-          alpha (float): planet's core size fraction [Rc/Rp]
-          beta (float): planet's core mass fraction [Mc/Mp]
-          epsilon: planetary rotational rate (Omega/Omega_crit)
+    Parameters:
+        alpha (float or ndarray): planet's core size fraction [Rc/Rp]
+        beta (float or ndarray): planet's core mass fraction [Mc/Mp]
+        epsilon (float or ndarray): planetary rotational rate (Omega/Omega_crit)
 
-      Returns:
-          float: tidal heat function
+    Returns:
+       float or ndarray: tidal heat function of a planet's convective envelope
 
     """
     fac0 = alpha**3.0
@@ -62,26 +71,26 @@ def k2Q_planet_envelope(alpha, beta, epsilon):
     return k2q
 
 
-def k2Q_planet_core(G, alpha, beta, Mp, Rp):
-    """Calculates the tidal heat function of a planet's rigid core (Source: Mathis, 2015).
+def k2Q_planet_core(
+    G: ArrayLike,
+    alpha: ArrayLike,
+    beta: ArrayLike,
+    Mp: ArrayLike,
+    Rp: ArrayLike
+) -> ArrayLike:
+    """
+    Calculates the tidal heat function of a planet's rigid core (Source: Mathis, 2015).
+    Works with scalars or NumPy arrays.
 
-    Parameters
-    ----------
-    G : `float`
-        planet's core rigidity
-    alpha : `float`
-        planet's core size fraction [Rc/Rp]
-    beta : `float`
-        planet's core mass fraction [Mc/Mp]
-    Mp : `float`
-        planet's mass [kg]
-    Rp : `float`
-        planet's radius [m]
+    Parameters:
+        G (float or ndarray): planet's core rigidity
+        alpha (float or ndarray): planet's core size fraction [Rc/Rp]
+        beta (float or ndarray): planet's core mass fraction [Mc/Mp]
+        Mp (float or ndarray): planet's mass [kg]
+        Rp (float or ndarray): planet's radius [m]
 
     Returns
-    --------
-    tidal heat function : float
-        Tidal heat function of a rigid core for the planet.
+        float or ndarray: Tidal heat function of a planet's rigid core.
     """
     gamma = alpha**3.0 * (1 - beta) / (beta * (1 - alpha**3.0))
 
@@ -119,18 +128,25 @@ def Mp2Rp(Mp, t):
     return Rp
 
 
-def mloss_atmo(t, Ls, a, Mp, Rp):
-    """Calculate loss of mass in the atmoshpere of the planet.
+def mloss_atmo(
+    t: ArrayLike,
+    Ls: ArrayLike,
+    a: ArrayLike,
+    Mp: ArrayLike,
+    Rp: ArrayLike
+) -> ArrayLike:
+    """
+    Calculate loss of mass in the atmoshpere of the planet. Works with scalars or NumPy arrays.
 
-    Args:
-        t (float): time
-        Ls (float): stellar luminosity [W]
-        a (float): planetary semi-major axis [m]
-        Mp (float): mass of the planet [kg]
-        Rp (float): radius of the planet [m]
+    Parameters:
+        t (float or ndarray): time
+        Ls (float or ndarray): stellar luminosity [W]
+        a (float or ndarray): planetary semi-major axis [m]
+        Mp (float or ndarray): mass of the planet [kg]
+        Rp (float or ndarray): radius of the planet [m]
 
     Returns:
-        float: loss rate of atmospheric mass
+        float or ndarray: loss rate of atmospheric mass
     """
     #  Zuluaga et. al (2012)
     ti = 0.06 * GYEAR * (Ls / LSUN)**-0.65
@@ -139,8 +155,7 @@ def mloss_atmo(t, Ls, a, Mp, Rp):
         Lx = 6.3E-4 * Ls
     else:
         Lx = 1.8928E28 * t**(-1.55)
-    # Sanz-forcada et. al (2011)
-    Leuv = 10**(4.8 + 0.86 * np.log10(Lx))
+    Leuv = 10**(4.8 + 0.86 * np.log10(Lx))  # Sanz-forcada et. al (2011)
     k_param = 1.0  # Sanz-forcada et. al (2011)
 
     lxuv = (Lx + Leuv) * 1E-7
@@ -201,7 +216,7 @@ def kappa_braking(OS, stellar_age, skumanich=True, alpha=0.495):
     return kappa
 
 
-def aRoche(Mp, densPart=3000, rfac=2.0, **args):
+def roche_radius_densities(Mp, densPart=3000, rfac=2.46, **args):
     """Calculate the Roche radius in term of the densities."""
     Rp = PLANETS.Saturn.R  # Since Roche radius does not depend on R this is a hypotetical one
     # Planet average density
@@ -211,30 +226,67 @@ def aRoche(Mp, densPart=3000, rfac=2.0, **args):
     return ar
 
 
-def aRoche_solid(Mp, Mm, Rm):
-    """Calculate the Roche radius using the masses.
+def roche_radius_masses(
+    M: ArrayLike,
+    m: ArrayLike,
+    Rm: ArrayLike,
+    rfac: float = 2.46
+) -> ArrayLike:
+    """
+    Calculate the Roche radius of a secondary body orbiting a primary body.
+    Works with scalars or NumPy arrays.
 
-    Args:
-        Mp (float): Planet's mass [kg]
-        Mm (float): Moon mass [kg]
-        Rm (float): Moon radius [kg]
+    Parameters:
+        M (float or ndarray): Mass of the primary body [kg]
+        m (float or ndarray): Mass of the secondary body [kg]
+        Rm (float or ndarray): Radius of the secondary body [m]
+        rfac (float, optional): Dimensionless Roche factor. Default is 2.46
 
     Returns:
-        float: Roche radius of the body with Mm.
+        float or ndarray: Roche radius [m].
     """
-    return Rm * (2. * Mp / Mm)**(1. / 3.)
+    M = np.asarray(M, dtype=np.float64)
+    m = np.asarray(m, dtype=np.float64)
+    Rm = np.asarray(Rm, dtype=np.float64)
+
+    return rfac * Rm * (M / m) ** (1 / 3)
 
 
-def hill_radius(a, e, m, M):
+def hill_radius(
+    a: ArrayLike,
+    e: ArrayLike,
+    m: ArrayLike,
+    M: ArrayLike
+) -> ArrayLike:
+    """
+    Calculate the Hill radius of a secondary body. Works with scalars or NumPy arrays.
+
+    Parameters:
+        a (float or ndarray): Semimajor axis of secondary body
+        e (float or ndarray): Eccentricity of secondary body
+        m (float or ndarray): Mass of secondary body
+        M (float or ndarray): Mass of primary body
+    Returns:
+        float or ndarray: Hill radius [m].
+    """
     return a * (1 - e) * (m / (3.0 * M))**(1.0 / 3.0)
 
 
 def alpha2beta(Mp, alpha, **args):
-    beta = KP * (Mp / PLANETS.Saturn.M)**DP * alpha**BP
+    beta = KP * (Mp / PLANETS.Saturn.M) ** DP * alpha ** BP
     return beta
 
 
-def omegaAngular(P):
+def omegaAngular(P: ArrayLike) -> ArrayLike:
+    """
+    Rotational rate given the period. Works with scalars or NumPy arrays.
+
+    Parameters:
+        P (ArrayLike): Orbital/rotational period
+
+    Returns:
+        float or ndarray: Rotational rate [s^-1]
+    """
     return 2 * np.pi / P
 
 
@@ -282,14 +334,15 @@ def surf_temp(flux):
     return (flux / stefan_b_constant)**0.25
 
 
-def stellar_lifespan(Ms):
-    """Calculate lifespan of a star.
+def stellar_lifespan(Ms: ArrayLike) -> ArrayLike:
+    """
+    Calculate lifespan of a star. Works with scalars or NumPy arrays.
 
-    Args:
+    Parameters:
         Ms (float): Stellar mass [kg]
 
     Returns:
-        float: lifespan of the star [s]
+        float or ndarray: Stellar lifespan [s]
     """
     return 10 * (MSUN / Ms)**2.5 * GYEAR
 

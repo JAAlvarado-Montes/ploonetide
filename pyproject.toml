@@ -5,8 +5,8 @@ description = "Calculate tidal interactions in planetary systems"
 authors = ["Jaime A. Alvarado-Montes <rasjaime@gmail.com>"]
 readme = "README.rst"
 repository = "https://github.com/JAAlvarado-Montes/ploonetide"
-keywords = ["Tidal", "Simulation", "TESS", "Astronomy"]
 license = "LICENSE"
+keywords = ["Tidal", "Simulation", "TESS", "Astronomy"]
 include = ["README.rst", "AUTHORS.rst", "CHANGES.rst", "CONTRIBUTING.rst", "CITATION", "LICENSE"]
 
 classifiers = [
@@ -58,17 +58,18 @@ sphinxcontrib-restbuilder = { version = ">=0.2", optional = true }
 gui = ["PyQt5"]
 notebooks = ["ipympl", "ipython", "ipywidgets", "jupyterlab"]
 viz = ["seaborn", "beautifulsoup4"]
-docs = ["numpydoc", "sphinx-automodapi", "sphinxcontrib-rawfiles", "sphinxcontrib-restbuilder", "pydata-sphinx-theme"]
+docs = [
+    "numpydoc", "sphinx-automodapi", "sphinxcontrib-rawfiles",
+    "sphinxcontrib-restbuilder", "pydata-sphinx-theme",
+    "myst-parser", "myst-nb", "sphinx", "furo"
+]
 dev = [
-  # All extras
-  "PyQt5", "ipympl", "ipython", "ipywidgets", "jupyterlab",
-  "seaborn", "beautifulsoup4",
-  "numpydoc", "sphinx-automodapi", "sphinxcontrib-rawfiles", "sphinxcontrib-restbuilder", "pydata-sphinx-theme",
-
-  # Dev tools
-  "black", "bumpver", "flake8", "ghp-import", "isort", "mypy",
-  "pylint", "pytest", "pytest-cov", "pytest-doctestplus",
-  "pytest-remotedata", "pytest-xdist"
+    "black", "bumpver", "flake8", "ghp-import", "isort", "mypy",
+    "pylint", "pytest", "pytest-cov", "pytest-doctestplus",
+    "pytest-remotedata", "pytest-xdist",
+    "numpydoc", "sphinx-automodapi", "sphinxcontrib-rawfiles",
+    "sphinxcontrib-restbuilder", "pydata-sphinx-theme",
+    "myst-parser", "myst-nb", "sphinx", "furo"
 ]
 
 [tool.poetry.group.dev.dependencies]
@@ -84,6 +85,15 @@ pytest-cov = ">=2.10.1"
 pytest-doctestplus = ">=0.8.0"
 pytest-remotedata = ">=0.3.2"
 pytest-xdist = ">=2.1.0"
+
+# Docs (ReadTheDocs compatible)
+sphinx = "^7.2"
+sphinx-autobuild = "^2021.3.14"
+sphinx-copybutton = "^0.5.2"
+myst-parser = "^2.0"
+myst-nb = "^1.0"
+furo = "^2024.0.0"
+numpydoc = "^1.5"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "src"]

@@ -1,11 +1,10 @@
+"""This module defines Simulation class"""
 import numpy as np
 import warnings
 
 from scipy.integrate._ivp.base import OdeSolver
 from scipy.integrate import solve_ivp
 from tqdm.auto import tqdm
-
-__all__ = ['Variable', 'Simulation']
 
 
 # === Monkey-patch OdeSolver to include tqdm progress bar ===
@@ -108,7 +107,8 @@ class Simulation:
         t_span = np.array([0.000001, t])  # Avoid t0=0 for stability
         t_eval = np.arange(t_span[0], t_span[1], dt)
 
-        self.bar_fmt = '{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} steps | {elapsed}<{remaining}'
+        self.bar_fmt = '{desc}{percentage:3.0f}%|{bar}|'\
+            + ' {n_fmt}/{total_fmt} steps | {elapsed}<{remaining}'
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')

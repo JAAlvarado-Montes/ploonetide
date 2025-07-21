@@ -13,10 +13,14 @@ from scipy.constants import G as Gconst
 
 log = logging.getLogger(__name__)
 
-__all__ = ['dict2obj', 'logged', 'set_xaxis_limits']
+__all__ = ['dict2obj', 'logged', 'set_xaxis_limits', 'make_rgb_colormap', 'colorline']
 
 
 class dict2obj(object):
+
+    """Converts dictionary to object
+    """
+
     def __init__(self, dic={}):
         self.__dict__.update(dic)
 
@@ -48,10 +52,7 @@ def make_rgb_colormap():
 
 def colorline(x, y, z=None, cmap='copper', linewidth=2, alpha=1.0):
     """
-    http://nbviewer.ipython.org/github/dpsanders/matplotlib-examples/blob/master/colorline.ipynb
-    http://matplotlib.org/examples/pylab_examples/multicolored_line.html
-    Plot a colored line with coordinates x and y
-    Optionally specify colors in the array z
+    Plot a colored line with coordinates x and y. Optionally specify colors in the array z
     Optionally specify a colormap, a norm function and a line width
     """
     # Default colors equally spaced on [0,1]:

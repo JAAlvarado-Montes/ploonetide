@@ -1,4 +1,5 @@
 .. _developer_guide:
+
 Developer Guide
 ===============
 
@@ -56,6 +57,19 @@ The `Makefile` provides shortcuts for common development tasks:
 - `make bump-minor` – Bump minor version
 - `make bump-major` – Bump major version
 - `make release` – Push current version and tag to GitHub after confirmation
+
+**Documentation**
+- `make docs` – Launch a live-reloading preview of the documentation at http://127.0.0.1:8000
+
+  This command uses:
+
+  .. code-block:: bash
+
+     sphinx-autobuild docs/source docs/_build/html
+
+  It opens the browser automatically and watches for changes in the documentation source. This does **not** interfere with your existing `conf.py` or the ReadTheDocs build process.
+
+  All required documentation tools (`sphinx`, `sphinx-autobuild`, `myst-parser`, `numpydoc`) are included in the `[tool.poetry.group.dev.dependencies]` section of `pyproject.toml`, so no additional installation is necessary for contributors.
 
 **Maintenance**
 - `make clean` – Remove temporary and build artifacts
