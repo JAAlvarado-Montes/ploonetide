@@ -69,7 +69,8 @@ dev = [
     "pytest-remotedata", "pytest-xdist",
     "numpydoc", "sphinx-automodapi", "sphinxcontrib-rawfiles",
     "sphinxcontrib-restbuilder", "pydata-sphinx-theme",
-    "myst-parser", "myst-nb", "sphinx", "furo"
+    "myst-parser", "myst-nb", "sphinx", "furo", "sphinx-autobuild",
+    "sphinx-copybutton"
 ]
 
 [tool.poetry.group.dev.dependencies]
