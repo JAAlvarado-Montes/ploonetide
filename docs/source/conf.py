@@ -34,7 +34,7 @@ extensions = [
     'myst_nb',  # Enables Jupyter notebook parsing and execution
 ]
 
-autosummary_generate = False
+autosummary_generate = True
 autodoc_default_options = {
     'members': True,
     'undoc-members': True,
