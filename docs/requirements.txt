@@ -1,3 +1,4 @@
+-e .
 sphinx>=7.2
 furo>=2024.0.0
 myst-parser>=2.0
