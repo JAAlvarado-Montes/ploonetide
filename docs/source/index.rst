@@ -48,11 +48,10 @@ Citation instructions are available at:
 `CITATION <https://github.com/JAAlvarado-Montes/ploonetide/blob/develop/CITATION>`_.
 
 
-API Reference Guide
-===================
 .. toctree::
    :maxdepth: 2
-   :caption: Core Package
+   :caption: Module Guide
+   :hidden:
 
    pages/reference_guide
 
