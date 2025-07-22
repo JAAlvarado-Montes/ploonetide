@@ -34,5 +34,7 @@ if platform.system() == "Linux" and os.environ.get('DISPLAY', '') == '':
 log = logging.getLogger(__name__)
 log.addHandler(logging.StreamHandler())
 
-from .ploonetide import *
+from .ploonetide import TidalSimulation
 from .version import __version__
+
+__all__ = ["TidalSimulation"]
