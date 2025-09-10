@@ -61,24 +61,24 @@ PLANETS = dict2obj(dict(
     Jupiter=dict2obj(dict(M=1.898e27,  # kg
                           R=6.9911e7,  # m
                           P=29.5 * YEAR,  # s
-                          Prot=9.4 * HOUR,  # s
+                          Prot=9.4 * HOUR / DAY,  # s
                           alpha=0.126,
                           beta=0.020)),
     Saturn=dict2obj(dict(M=5.683e26,  # kg
                          R=6.0268e7,  # m
                          P=10.8 * YEAR,  # s
-                         Prot=10.656 * HOUR,  # s
+                         Prot=10.656 * HOUR / DAY,  # s
                          alpha=0.219,
                          beta=0.196)),
     Uranus=dict2obj(dict(M=86.8e24,  # kg
                          R=2.5632e7,  # m
                          P=84 * YEAR,  # s
-                         Prot=17.24 * HOUR,  # s
+                         Prot=17.24 * HOUR / DAY,  # s
                          alpha=0.30,
                          beta=0.093)),
     Neptune=dict2obj(dict(M=1.024e26,  # kg
                           R=2.4622e7,  # m
                           P=164.8 * YEAR,  # s
-                          Prot=16.11 * HOUR,  # s
+                          Prot=16.11 * HOUR / DAY,  # s
                           alpha=0.35,
                           beta=0.131,))))

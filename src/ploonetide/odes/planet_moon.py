@@ -9,7 +9,7 @@ from ploonetide.utils.constants import GR, GCONST
 #############################################################
 # DIFFERENTIAL EQUATIONS
 #############################################################
-def dnmdt(t, q, parameters):
+def dnmdt(t, q, parameters, initial_conds):
     """Define the differential equation for the moon mean motion.
 
     Args:
@@ -34,9 +34,9 @@ def dnmdt(t, q, parameters):
 
     # Dynamic parameter
     op = parameters['op']
-    if parameters['em_ini'] == 0.0:
+    if initial_conds['em_ini'] == 0.0:
         eccm = 0.0
-    elif parameters['em_ini'] != 0.0:
+    elif initial_conds['em_ini'] != 0.0:
         eccm = parameters['eccm']
 
     # Secondary properties
@@ -57,17 +57,17 @@ def dnmdt(t, q, parameters):
         k2q_planet_envelope = k2Q_planet_envelope(alpha_planet, beta_planet, epsilon)
         k2q_planet = k2q_planet_core + k2q_planet_envelope
 
-    if parameters['em_ini'] == 0.0:
+    if initial_conds['em_ini'] == 0.0:
         dnmdt = (-9. / 2 * k2q_planet * Mm * Rp**5 / (GCONST**(5. / 3) * Mp**(8. / 3))
                  * nm**(16. / 3) * np.sign(op - nm))
-    elif parameters['em_ini'] != 0.0:
+    elif initial_conds['em_ini'] != 0.0:
         dnmdt = 9. * nm**(16. / 3.) * k2q_planet * Mm * Rp**5. / (Mp * (GCONST * (Mp + Mm))**(5. / 3.)) *\
             ((1. + 23. * eccm**2.) - (1. + 13.5 * eccm**2.) * op / nm)
 
     return [dnmdt]
 
 
-def demdt(t, q, parameters):
+def demdt(t, q, parameters, initial_conds):
     """Define the differential equation for the eccentricity of the moon.
 
     Args:
@@ -118,7 +118,7 @@ def demdt(t, q, parameters):
     return [demdt]
 
 
-def dopdt(t, q, parameters):
+def dopdt(t, q, parameters, initial_conds):
     """Define the differential equation for the rotational rate of the planet.
 
     Args:
@@ -150,7 +150,7 @@ def dopdt(t, q, parameters):
     if not args['planet_size_evolution']:
         Rp = args['Rp']
     else:
-        Rp = Mp2Rp(Mp, t, **args)
+        Rp = Mp2Rp(Mp, t)
         alpha_planet = alpha_planet * args['Rp'] / Rp
 
     epsilon = op / omegaCritic(Mp, Rp)
@@ -174,7 +174,7 @@ def dopdt(t, q, parameters):
     return [dopdt]
 
 
-def dnpdt(t, q, parameters):
+def dnpdt(t, q, parameters, initial_conds):
     """Define the differential equation for the mean motion of the planet.
 
     Args:
@@ -204,7 +204,7 @@ def dnpdt(t, q, parameters):
     if not args['planet_size_evolution']:
         Rp = args['Rp']
     else:
-        Rp = Mp2Rp(Mp, t, **args)
+        Rp = Mp2Rp(Mp, t)
         alpha_planet = alpha_planet * args['Rp'] / Rp
 
     epsilon = op / omegaCritic(Mp, Rp)
@@ -227,7 +227,7 @@ def dnpdt(t, q, parameters):
 #############################################################
 # INTEGRATION OF THE WHOLE SYSTEM
 #############################################################
-def solution_planet_moon(t, q, parameters):
+def solution_planet_moon(t, q, parameters, initial_conds):
     """Define the coupled differential equation for the system of EDOs.
 
     Args:
@@ -242,7 +242,7 @@ def solution_planet_moon(t, q, parameters):
     npp = q[1]
     nm = q[2]
 
-    if parameters['em_ini'] != 0.0:
+    if initial_conds['em_ini'] != 0.0:
         eccm = q[3]
         parameters['eccm'] = eccm
 
@@ -250,15 +250,15 @@ def solution_planet_moon(t, q, parameters):
     parameters['npp'] = npp
     parameters['nm'] = nm
 
-    dopdtp = dopdt(t, [op], parameters)
-    dnpdtp = dnpdt(t, [npp], parameters)
-    dnmdtm = dnmdt(t, [nm], parameters)
+    dopdtp = dopdt(t, [op], parameters, initial_conds)
+    dnpdtp = dnpdt(t, [npp], parameters, initial_conds)
+    dnmdtm = dnmdt(t, [nm], parameters, initial_conds)
 
-    if parameters['em_ini'] == 0.0:
+    if initial_conds['em_ini'] == 0.0:
         solution = dopdtp + dnpdtp + dnmdtm
 
-    elif parameters['em_ini'] != 0.0:
-        demdtm = demdt(t, [eccm], parameters)
+    elif initial_conds['em_ini'] != 0.0:
+        demdtm = demdt(t, [eccm], parameters, initial_conds)
         solution = dopdtp + dnpdtp + dnmdtm + demdtm
 
     return solution

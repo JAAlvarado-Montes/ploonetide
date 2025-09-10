@@ -36,7 +36,7 @@ def make_rgb_colormap():
     and in the interval (0,1).
     """
     c = mcolors.ColorConverter().to_rgb
-    seq = [c('white'), c('lightblue'), 0.08, c('lightblue'), c('blue'), 0.2, c('blue'), c('green'),
+    seq = [c('lavender'), c('lightblue'), 0.08, c('lightblue'), c('blue'), 0.2, c('blue'), c('green'),
            0.4, c('green'), c('orange'), 0.6, c('orange'), c('red'), 1.0, c('red')]
     seq = [(None,) * 3, 0.0] + list(seq) + [1.0, (None,) * 3]
     cdict = {'red': [], 'green': [], 'blue': []}

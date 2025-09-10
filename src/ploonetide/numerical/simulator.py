@@ -6,42 +6,44 @@ from scipy.integrate._ivp.base import OdeSolver
 from scipy.integrate import solve_ivp
 from tqdm.auto import tqdm
 
-
 # === Monkey-patch OdeSolver to include tqdm progress bar ===
 
 # Save original methods
-_original_init = OdeSolver.__init__
-_original_step = OdeSolver.step
+# _original_init = OdeSolver.__init__
+# _original_step = OdeSolver.step
 
 
-# Define patched methods
-def _patched_init(self, fun, t0, y0, t_bound, vectorized=True, support_complex=False):
-    bar_format = '{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} steps | {elapsed}<{remaining}'
-    self._pbar = tqdm(
-        desc='Computing orbital evolution: ',
-        bar_format=bar_format,
-        total=t_bound - t0,
-        initial=t0
-    )
-    self._last_t = t0
+# # Define patched methods
+# def _patched_init(self, fun, t0, y0, t_bound, vectorized=True, support_complex=False, **kwargs):
+#     progress_total = kwargs.pop('_progress_total', None)
+#     total_steps = progress_total if progress_total is not None else int(np.ceil(t_bound - t0))
 
-    _original_init(self, fun, t0, y0, t_bound, vectorized, support_complex)
+#     bar_format = '{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} steps | {elapsed}<{remaining}'
+#     self._pbar = tqdm(
+#         desc='Computing orbital evolution: ',
+#         bar_format=bar_format,
+#         total=total_steps,
+#         initial=0
+#     )
+#     self._last_t = t0
 
-
-def _patched_step(self):
-    _original_step(self)
-
-    delta_t = self.t - self._last_t
-    self._pbar.update(delta_t)
-    self._last_t = self.t
-
-    if self.t >= self.t_bound:
-        self._pbar.close()
+#     _original_init(self, fun, t0, y0, t_bound, vectorized, support_complex, **kwargs)
 
 
-# Apply patch
-OdeSolver.__init__ = _patched_init
-OdeSolver.step = _patched_step
+# def _patched_step(self):
+#     _original_step(self)
+
+#     delta_t = self.t - self._last_t
+#     self._pbar.update(delta_t)  # One step per call to step()
+#     self._last_t = self.t
+
+#     if self.t >= self.t_bound:
+#         self._pbar.close()
+
+
+# # Apply patch
+# OdeSolver.__init__ = _patched_init
+# OdeSolver.step = _patched_step
 
 
 # === Variable and Simulation classes ===
@@ -71,11 +73,11 @@ class Simulation:
 
     def __init__(self, variables):
         self.variables = variables
-        self.N_variables = len(variables)
+        self.N_variables = len(self.variables)
         self.Ndim = self.N_variables
-        self.quant_vec = np.concatenate([var.return_vec() for var in variables])
+        self.quant_vec = np.concatenate([var.return_vec() for var in self.variables])
 
-    def set_diff_eq(self, calc_diff_eqs, **kwargs):
+    def set_diff_eq(self, calc_diff_eqs, params, ini_conds):
         """
         Set the differential equation function.
 
@@ -84,7 +86,8 @@ class Simulation:
             **kwargs: Additional arguments passed to the function
         """
         self.calc_diff_eqs = calc_diff_eqs
-        self.diff_eq_kwargs = kwargs
+        self.diff_eq_kwargs = params
+        self.diff_eq_ini_conds = ini_conds
 
     def set_integration_method(self, method='RK45'):
         """
@@ -104,25 +107,45 @@ class Simulation:
             dt (float): Timestep
             t0 (float): Initial time (default 0.0)
         """
+        self.time_step = dt
+        self.total_time = t
         t_span = np.array([0.000001, t])  # Avoid t0=0 for stability
         t_eval = np.arange(t_span[0], t_span[1], dt)
 
-        self.bar_fmt = '{desc}{percentage:3.0f}%|{bar}|'\
+        self.bar_fmt = '{desc}{percentage:4.0f}%|{bar}|'\
             + ' {n_fmt}/{total_fmt} steps | {elapsed}<{remaining}'
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
 
-            sols = solve_ivp(
-                self.calc_diff_eqs,
-                t_span,
-                self.quant_vec,
-                method=self.integration_method,
-                vectorized=True,
-                rtol=1e-20,
-                min_step=1e-6,
-                args=(self.diff_eq_kwargs,),
-                t_eval=t_eval
-            )
+            if self.integration_method == 'LSODA':
+                from scipy.integrate import odeint
+                sols = odeint(
+                    self.calc_diff_eqs, self.quant_vec,
+                    t_eval,
+                    args=(self.diff_eq_kwargs, self.diff_eq_ini_conds),
+                    tfirst=True,
+                    mxstep=50000,
+                    mxords=20,
+                    mxordn=20,
+                    rtol=1e-10,
+                    atol=1e-10
+                )
 
-            self.history = sols.t, sols.y
+                self.history = t_eval, sols.T
+
+            else:
+                sols = solve_ivp(
+                    self.calc_diff_eqs,
+                    t_span,
+                    self.quant_vec,
+                    method=self.integration_method,
+                    vectorized=True,
+                    rtol=1e-20,
+                    min_step=1e-6,
+                    args=(self.diff_eq_kwargs, self.diff_eq_ini_conds),
+                    t_eval=t_eval,
+                    _progress_total=len(t_eval)
+                )
+
+                self.history = sols.t, sols.y

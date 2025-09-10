@@ -77,10 +77,6 @@ Functions to calculate physical and orbital properties
 **Function Utilities**
 
 .. automodule:: ploonetide.utils.functions
-   :members:
-   :undoc-members:
-   :show-inheritance:
-   :no-index:
 
 .. currentmodule:: ploonetide.utils.functions
 

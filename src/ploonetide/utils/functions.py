@@ -5,6 +5,7 @@ import astropy.units as u
 import matplotlib.pyplot as plt
 
 from collections import namedtuple
+from tqdm.auto import tqdm
 from typing import Union
 
 from ploonetide.utils.constants import *
@@ -216,21 +217,29 @@ def kappa_braking(OS, stellar_age, skumanich=True, alpha=0.495):
     return kappa
 
 
-def roche_radius_densities(Mp, densPart=3000, rfac=2.46, **args):
-    """Calculate the Roche radius in term of the densities."""
-    Rp = PLANETS.Saturn.R  # Since Roche radius does not depend on R this is a hypotetical one
-    # Planet average density
-    densP = Mp / ((4. / 3) * np.pi * Rp**3)
+def roche_radius_HJ(M, mp, Rp, rfac=2.7):
+    """Calculate the Roche radius in term for HJ disruption"""
+    r_roche = rfac * (Ms / mp)**(1 / 3) * Rp  # Roche radius of HJ
+    return r_roche
+
+
+def roche_radius_rigid(Rp, density_primary, density_secondary):
+    """Calculate the Roche radius for a rigid satellite."""
     # Roche radius
-    ar = rfac * Rp * (densPart / densP)**(-1.0 / 3.0)
-    return ar
+    return Rp * (2 * density_primary / density_secondary)**(1.0 / 3.0)
+
+
+def roche_radius_fluid(Rp, density_primary, density_secondary):
+    """Calculate the Roche radius for a rigid satellite."""
+    # Roche radius
+    return 2.44 * Rp * (density_primary / density_secondary)**(1.0 / 3.0)
 
 
 def roche_radius_masses(
     M: ArrayLike,
     m: ArrayLike,
     Rm: ArrayLike,
-    rfac: float = 2.46
+    rfac: float
 ) -> ArrayLike:
     """
     Calculate the Roche radius of a secondary body orbiting a primary body.
@@ -249,27 +258,46 @@ def roche_radius_masses(
     m = np.asarray(m, dtype=np.float64)
     Rm = np.asarray(Rm, dtype=np.float64)
 
-    return rfac * Rm * (M / m) ** (1 / 3)
+    return Rm * (2 * M / m) ** (1 / 3)
 
 
 def hill_radius(
-    a: ArrayLike,
-    e: ArrayLike,
-    m: ArrayLike,
+    ap: ArrayLike,
+    ep: ArrayLike,
+    mp: ArrayLike,
     M: ArrayLike
 ) -> ArrayLike:
     """
     Calculate the Hill radius of a secondary body. Works with scalars or NumPy arrays.
 
     Parameters:
-        a (float or ndarray): Semimajor axis of secondary body
-        e (float or ndarray): Eccentricity of secondary body
-        m (float or ndarray): Mass of secondary body
-        M (float or ndarray): Mass of primary body
+        a (float or ndarray): Semimajor axis of planet
+        e (float or ndarray): Eccentricity of planet
+        m (float or ndarray): Mass of planet
+        M (float or ndarray): Mass of star
     Returns:
         float or ndarray: Hill radius [m].
     """
-    return a * (1 - e) * (m / (3.0 * M))**(1.0 / 3.0)
+    return ap * (1 - ep) * (mp / (3.0 * M))**(1.0 / 3.0)
+
+
+def critical_hill_radius(
+    ap_hill: ArrayLike,
+    ep: ArrayLike,
+    em: ArrayLike
+) -> ArrayLike:
+    """
+    Calculate the critical Hill radius of a secondary body. Works with scalars or NumPy arrays.
+    Rosario-Franco et al. (2020)
+
+    Parameters:
+        ap_hill (float or ndarray): Hill radius of planet
+        ep (float or ndarray): Eccentricity of planet
+        em (float or ndarray): Eccentricity of moon
+    Returns:
+        float or ndarray: Critical Hill radius [m].
+    """
+    return 0.4031 * (1 - 1.123 * ep - 0.1862 * em) * ap_hill
 
 
 def alpha2beta(Mp, alpha, **args):
@@ -334,6 +362,70 @@ def surf_temp(flux):
     return (flux / stefan_b_constant)**0.25
 
 
+# def moon_surface_temper(nm, eccm, parameters):
+#     T_stab = 0.0
+#     T_stab = bisection(nm, eccm, parameters)
+
+#     if T_stab > 0:
+#         flux, _ = tidal_heat(T_stab, nm, eccm, parameters)
+#         T_s = surf_temp(flux)
+
+#     elif T_stab <= 0:
+#         T_s = T_stab
+
+#     return T_s
+
+# def moon_surface_temper_scalar(nm, eccm, parameters):
+#     T_stab = bisection(nm, eccm, parameters)
+
+#     if T_stab > 0:
+#         flux, _ = tidal_heat(T_stab, nm, eccm, parameters)
+#         return surf_temp(flux)
+#     else:
+#         return T_stab
+
+
+# moon_surface_temper = np.vectorize(moon_surface_temper_scalar)
+
+
+# def moon_surface_temper(nm_array, eccm_array, parameters):
+#     def compute(i):
+#         nm = nm_array[i]
+#         eccm = eccm_array[i]
+#         T_stab = bisection(nm, eccm, parameters)
+#         if T_stab > 0:
+#             flux, _ = tidal_heat(T_stab, nm, eccm, parameters)
+#             return surf_temp(flux)
+#         else:
+#             return T_stab
+
+#     return np.fromiter((compute(i) for i in range(len(nm_array))), dtype=float)
+
+def moon_surface_temper(nm, eccm, parameters, bar_fmt):
+    moon_surface_temperature = list()
+    for n, e in tqdm(
+        zip(nm, eccm),
+        total=len(nm),
+        desc='Computing moon surface temperature: ',
+        bar_format=bar_fmt
+    ):
+        T_stab = 0.0
+        T_s = 0.0
+        flux = 0.0
+        T_stab = bisection(n, e, parameters)
+
+        if T_stab > 0:
+            flux, _ = tidal_heat(T_stab, n, e, parameters)
+            T_s = surf_temp(flux)
+
+        elif T_stab <= 0:
+            T_s = T_stab
+
+        moon_surface_temperature.append(T_s)
+
+    return moon_surface_temperature
+
+
 def stellar_lifespan(Ms: ArrayLike) -> ArrayLike:
     """
     Calculate lifespan of a star. Works with scalars or NumPy arrays.
@@ -386,10 +478,36 @@ def power(ee, aa, KQ, Ms, Rp):
 # ###################DOBS-DIXON 2004#######################
 
 
-def find_moon_fate(t, Ms, Mp, Mm, nm, am_roche, ap_hill):
+def find_moon_fate(
+    t: ArrayLike,
+    Ms: ArrayLike,
+    Mp: ArrayLike,
+    Mm: ArrayLike,
+    nm: ArrayLike,
+    am_roche: ArrayLike,
+    ap_hill: ArrayLike,
+    ep: ArrayLike,
+    em: ArrayLike
+) -> ArrayLike:
+    """Find the fate of an orbiting moon
 
-    nm_roche = meanMotion(am_roche, Mp, Mm)
-    np_hill = meanMotion(ap_hill, Ms, Mp)
+    Args:
+        t (float or np.ndarray): times of simulation
+        Ms (float or np.ndarray): Stellar mass
+        Mp (float or np.ndarray): Planetary mass
+        Mm (float or np.ndarray): Moon mass
+        nm (float or np.ndarray): Moon mean motion
+        am_roche (float or np.ndarray): Roche radius of orbiting moon
+        ap_hill (float or np.ndarray): Hill radius of host planet
+        ep (float or ndarray): Eccentricity of host planet
+        em (float or ndarray): Eccentricity of moon
+
+    Returns:
+        tuple: NamedTuple with the migration time, index of that time, and fate.
+    """
+    am = mean2axis(nm, Mp, Mm)
+
+    ap_critical = critical_hill_radius(ap_hill, ep, em)
 
     scale = GYEAR
     scale_label = 'Gyr'
@@ -397,26 +515,31 @@ def find_moon_fate(t, Ms, Mp, Mm, nm, am_roche, ap_hill):
     if scale != GYEAR:
         scale_label = 'Myr'
 
-    try:
-        pos = np.where(nm >= nm_roche)[0][0]
+    if np.any(am >= ap_critical):
+        pos = [i for i, a in enumerate(am) if a > ap_critical][0]
         rt_time = t[pos] / scale
-        fate = 'crosses'
-        print(f'Moon {fate} the Roche limit in {rt_time:.6f} {scale_label}')
-    except IndexError:
-        try:
-            pos = np.where(nm <= np_hill)[0][0]
-            rt_time = t[pos] / scale
-            fate = 'escapes'
-            print(f'Moon {fate} from the planetary Hill radius in {rt_time:.6f} {scale_label}')
-        except IndexError:
-            pos = -1
-            rt_time = np.max(t) / scale
-            fate = "stalls"
-            print('Moon migrates too slow and never crosses the Hill radius or the Roche limit.')
+        fate = 'escapes'
+        prompt = f'Moon {fate} the critical Hill radius in {rt_time:.6f} {scale_label}'
+    elif np.any(am <= am_roche):  # len(np.where(nm >= nm_roche)[0]) != 0:
+        pos = [i for i, a in enumerate(am) if a < am_roche][0]
+        rt_time = t[pos] / scale
+        fate = 'disrupts'
+        prompt = f'Moon {fate} at the Roche limit in {rt_time:.6f} {scale_label}'
+    # elif np.all(am >= ap_critical):
+    #     pos = [i for i, a in enumerate(am) if a > ap_critical][0]
+    #     rt_time = t[pos] / scale
+    #     fate = 'Moon located at unstable orbit'
+    #     prompt = f'Moon was located beyond the critical Hill radius in {rt_time:.6f} {scale_label}'
+    else:
+        pos = -1
+        rt_time = np.max(t) / scale
+        fate = "stalls"
+        prompt = 'Moon migrates too slow and never crosses the Hill radius or the Roche limit.'
+    # print(f'{prompt}')
 
-    Outputs = namedtuple('Outputs', 'time index fate')
+    Outputs = namedtuple('Outputs', 'time index fate prompt')
 
-    return Outputs(rt_time, pos, fate)
+    return Outputs(rt_time, pos, fate, prompt)
 
 
 def mu_below_T_solidus():
@@ -1146,8 +1269,9 @@ def f_m(e_sp, i, omega, phi_sp, phi_pm, lon, lat):
     """
     Defines the total flux on the moon.
     """
-    flux_m = f_s(e_sp, i, omega, phi_sp, phi_pm, lon, lat) + f_t(e_sp, i, omega,
-                                                                 phi_sp, phi_pm, lon, lat) + f_r(e_sp, i, omega, phi_sp, phi_pm, lon, lat)
+    flux_m = f_s(e_sp, i, omega, phi_sp, phi_pm, lon, lat) \
+        + f_t(e_sp, i, omega, phi_sp, phi_pm, lon, lat) \
+        + f_r(e_sp, i, omega, phi_sp, phi_pm, lon, lat)
 
     return flux_m
 
