@@ -8,8 +8,6 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.colors as mcolors
 
-from scipy.constants import G as Gconst
-
 
 log = logging.getLogger(__name__)
 
@@ -112,27 +110,40 @@ def logged(func):
 #############################################################
 # CANONICAL UNITS TRANSFORMATION
 #############################################################
-def canonic_units(**kwargs):
-    """Convert to chosen units
+def canonic_units(*, uM=None, uL=None, uT=None, G=6.6740831e-11):
+    """Convert to chosen canonical units.
+
+    Provide exactly two among (uM, uL, uT), the third is computed.
 
     Args:
-        **kwargs: keyword arguments
+        uM (float, optional): Mass unit [kg]
+        uL (float, optional): Length unit [m]
+        uT (float, optional): Time unit [s]
+        G (float, optional): Gravitational constant (default SI value)
 
     Returns:
-        float: Unit conversion factors
+        tuple: (uM, uL, uT)
     """
-    G = Gconst
-    if 'uM' in kwargs.keys() and 'uL' in kwargs.keys():
-        uT = (kwargs['uL']**3 / (G * kwargs['uM']))**0.5
-        return [kwargs.get('uM'), kwargs.get('uL'), uT]
+    # Count how many arguments are provided
+    provided = [x is not None for x in (uM, uL, uT)].count(True)
+    if provided != 2:
+        raise ValueError("You must provide exactly two among (uM, uL, uT).")
 
-    elif 'uM' in kwargs.keys() and 'uT' in kwargs.keys():
-        uL = (G * kwargs['uM'] * kwargs['uT']**2)**(1.0 / 3.0)
-        return [kwargs.get('uM'), uL, kwargs.get('uT')]
+    if uM is not None and uL is not None:
+        uT = (uL**3 / (G * uM))**0.5
 
-    elif 'uL' in kwargs.keys() and 'uT' in kwargs.keys():
-        uM = (kwargs['uL']**3 / (kwargs['uT']**2 * G))
-        return [uM, kwargs.get('uL'), kwargs.get('uT')]
+    elif uM is not None and uT is not None:
+        uL = (G * uM * uT**2)**(1.0 / 3.0)
+
+    elif uL is not None and uT is not None:
+        uM = uL**3 / (uT**2 * G)
+
+    # Sanity checks
+    for name, val in zip(("uM", "uL", "uT"), (uM, uL, uT)):
+        if not (isinstance(val, (int, float)) and val > 0):
+            raise ValueError(f"{name} must be a positive number, got {val!r}")
+
+    return uM, uL, uT
 
 
 # THIS IS THE FIXED-POINT FUNCTION FOR DOING THE "k" ITERATIONS TO

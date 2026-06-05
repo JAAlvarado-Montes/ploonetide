@@ -40,7 +40,6 @@ The `Makefile` provides shortcuts for common development tasks:
 
 **Environment and Installation**
 - `make install` – Full setup: environment creation + dependency installation
-- `make shell` – Open Poetry shell (if using Poetry)
 - `make env` – Show environment status
 
 **Code Quality and Testing**
@@ -56,7 +55,31 @@ The `Makefile` provides shortcuts for common development tasks:
 - `make bump` – Bump patch version
 - `make bump-minor` – Bump minor version
 - `make bump-major` – Bump major version
-- `make release` – Push current version and tag to GitHub after confirmation
+- `make release` – Push the current branch and matching version tag to GitHub after confirmation
+
+Release Workflow
+----------------
+
+Before creating a release, make sure all intended code, documentation, and test changes
+are committed. The bump commands create a dedicated version commit and Git tag, so the
+working tree should be clean before running them.
+
+Recommended release sequence:
+
+.. code-block:: bash
+
+   make clean
+   make pytest
+   poetry check
+   git status
+   git add <changed-files>
+   git commit -m "Prepare release"
+   make bump-minor
+   make release
+
+Use `make bump` for a patch release, `make bump-minor` for a minor release, and
+`make bump-major` for a major release. Tags are created from the version string in
+`pyproject.toml` (for example, `1.1.0`).
 
 **Documentation**
 - `make docs` – Launch a live-reloading preview of the documentation at http://127.0.0.1:8000
@@ -73,7 +96,6 @@ The `Makefile` provides shortcuts for common development tasks:
 
 **Maintenance**
 - `make clean` – Remove temporary and build artifacts
-- `make setup.py` – Generate a `setup.py` from `pyproject.toml` using `dephell`
 - `make export-conda-env` – Export `conda_environment.yml` directly from `pyproject.toml`
 
 Important Notes

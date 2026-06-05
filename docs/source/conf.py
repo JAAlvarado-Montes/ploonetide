@@ -1,9 +1,11 @@
 import os
 import sys
-from distutils.util import convert_path
+from pathlib import Path
 
 # -- Path setup --------------------------------------------------------------
-sys.path.append(os.path.abspath(os.path.join(__file__, "../../src/")))
+ROOT_DIR = Path(__file__).resolve().parents[2]
+SRC_DIR = ROOT_DIR / "src"
+sys.path.append(str(SRC_DIR))
 
 # -- Project information -----------------------------------------------------
 project = 'Ploonetide'
@@ -12,7 +14,7 @@ copyright = 'Jaime A. Alvarado-Montes'
 
 # Load version from version.py
 main_ns = {}
-ver_path = convert_path('../../src/ploonetide/version.py')
+ver_path = SRC_DIR / 'ploonetide' / 'version.py'
 with open(ver_path) as ver_file:
     exec(ver_file.read(), main_ns)
 release = main_ns['__version__']
@@ -35,6 +37,7 @@ extensions = [
 ]
 
 autosummary_generate = True
+numpydoc_show_class_members = False
 autodoc_default_options = {
     'members': True,
     'undoc-members': True,

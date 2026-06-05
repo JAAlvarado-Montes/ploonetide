@@ -42,15 +42,33 @@ uncertainties = ">=1.0"
 
 # Optional dependencies
 beautifulsoup4 = { version = ">=1.0", optional = true }
+black = { version = ">=21.12b0", optional = true }
+bumpver = { version = ">=1.0", optional = true }
+flake8 = { version = ">=3.8.4", optional = true }
+furo = { version = "^2024.0.0", optional = true }
+ghp-import = { version = ">=1.0.1", optional = true }
 ipympl = { version = ">=0.9.7", optional = true }
 ipython = { version = ">=1.0", optional = true }
 ipywidgets = { version = ">=1.0", optional = true }
+isort = { version = ">=5.6.4", optional = true }
 jupyterlab = { version = ">=1.0", optional = true }
+mypy = { version = ">=0.930", optional = true }
+myst-nb = { version = "^1.0", optional = true }
+myst-parser = { version = "^2.0", optional = true }
 numpydoc = { version = ">=1.1.0", optional = true }
 pydata-sphinx-theme = { version = ">=0.7.1", optional = true }
+pylint = { version = ">=2.6.0", optional = true }
 PyQt5 = { version = ">=5.15.11", optional = true }
+pytest = { version = ">=6.1.2", optional = true }
+pytest-cov = { version = ">=2.10.1", optional = true }
+pytest-doctestplus = { version = ">=0.8.0", optional = true }
+pytest-remotedata = { version = ">=0.3.2", optional = true }
+pytest-xdist = { version = ">=2.1.0", optional = true }
 seaborn = { version = ">=0.11.2", optional = true }
+sphinx = { version = "^7.2", optional = true }
 sphinx-automodapi = { version = ">=0.13", optional = true }
+sphinx-autobuild = { version = "^2021.3.14", optional = true }
+sphinx-copybutton = { version = "^0.5.2", optional = true }
 sphinxcontrib-rawfiles = { version = ">=0.1.1", optional = true }
 sphinxcontrib-restbuilder = { version = ">=0.2", optional = true }
 

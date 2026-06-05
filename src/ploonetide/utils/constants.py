@@ -26,13 +26,13 @@ DP = -0.232
 #############################################################
 # GYRATION RADIUS
 #############################################################
-GR = 0.2  # None
+GR = 0.25  # None
 
-#############################################################
-# CONSTANTS
-#############################################################
+# =========================
+# Constants (SI)
+# =========================
 
-# PHYSICAL CONSTANTS
+# PHYSICAL
 MIN = const.minute  # s
 HOUR = const.hour  # s
 DAY = const.day  # s
@@ -45,6 +45,8 @@ GCONST = const.G  # m^3 / kg s^2
 # General constants
 gas_constant = const.gas_constant  # J mol^-1 K^-1  -->  kg * m^2 s^-2 * mol^-1 * K-1
 stefan_b_constant = const.sigma  # W m^-2 K^-4  -->  kg s^-3 K^-4
+kB = 1.380649e-23  # [J K^-1] Boltzmann constant
+mH = 1.6735575e-27          # [kg] mass of hydrogen atom
 
 # ASTRONOMICAL CONSTANTS
 AU = const.au  # m
@@ -81,4 +83,4 @@ PLANETS = dict2obj(dict(
                           P=164.8 * YEAR,  # s
                           Prot=16.11 * HOUR / DAY,  # s
                           alpha=0.35,
-                          beta=0.131,))))
+                          beta=0.131))))

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from collections import namedtuple
 from tqdm.auto import tqdm
-from typing import Union
+from typing import Union, Literal
 
 from ploonetide.utils.constants import *
 from ploonetide.utils import make_rgb_colormap
@@ -17,6 +17,49 @@ ArrayLike = Union[float, np.ndarray]
 #############################################################
 # SPECIFIC ROUTINES
 #############################################################
+def k2Q_inertial_waves_convective_envelope(
+    alpha: ArrayLike,
+    beta: ArrayLike,
+    epsilon: ArrayLike,
+    interface='rigid-fluid'
+) -> ArrayLike:
+    """Calculate the tidal heat function of a convective envelope via excited
+    inertial waves (IWs) (Source: Mathis, 2015) for a planet (rigid-fluid interface) and
+    for a star (fluid-fluid) interface. Works with scalars or NumPy arrays.
+
+    Args:
+        alpha (float): size aspect ratio [Rc/R_p(*)]
+        beta (float): mass aspect ratio [Mc/M_p(*)]
+        epsilon (float): rotational rate term [Omega/Omega_crit]
+        interface (str, optional): Interface between two adjacent internal layers.
+
+    Returns:
+          float: tidal heat function
+    """
+    if interface == 'rigid-fluid':
+        fac0 = alpha**3.0
+        fac1 = alpha**5.0
+        fac2 = fac1 / (1 - fac1)
+
+        gamma = fac0 * (1 - beta) / (beta * (1 - fac0))
+        fac3 = (1 - gamma) / gamma * fac0
+
+        k2q = 100 * np.pi / 63 * epsilon**2 * fac2 * (1 + fac3) / (1 + 5. / 2 * fac3)**2
+
+    else:
+        gamma = alpha**3. * (1 - beta) / (beta * (1 - alpha**3.))
+
+        line1 = 100 * np.pi / 63 * epsilon**2 * (alpha**5. / (1 - alpha**5.)) * (1 - gamma)**2.
+        line2 = ((1 - alpha)**4.0 * (1 + 2 * alpha + 3 * alpha**2. + 1.5 * alpha**3.)**2.0
+                 * (1 + (1 - gamma) / gamma * alpha**3.))
+        line3 = (1 + 1.5 * gamma + 2.5 / gamma * (1 + 0.5 * gamma - 1.5 * gamma**2.)
+                 * alpha**3. - 9. / 4. * (1 - gamma) * alpha**5.)
+
+        k2q = line1 * line2 / line3**2.0
+
+    return k2q
+
+
 def k2Q_star_envelope(alpha, beta, epsilon):
     """Calculate tidal heat function for a stellar envelope (Source: Mathis, 2015).
 
@@ -42,34 +85,34 @@ def k2Q_star_envelope(alpha, beta, epsilon):
     return k2q1
 
 
-def k2Q_planet_envelope(
-    alpha: ArrayLike,
-    beta: ArrayLike,
-    epsilon: ArrayLike
-) -> ArrayLike:
-    """
-    Calculate the tidal heat function of a planet's convective envelope (Source: Mathis, 2015).
-    Works with scalars or NumPy arrays.
+# def k2Q_planet_envelope(
+#     alpha: ArrayLike,
+#     beta: ArrayLike,
+#     epsilon: ArrayLike
+# ) -> ArrayLike:
+#     """
+#     Calculate the tidal heat function of a planet's convective envelope (Source: Mathis, 2015).
+#     Works with scalars or NumPy arrays.
 
-    Parameters:
-        alpha (float or ndarray): planet's core size fraction [Rc/Rp]
-        beta (float or ndarray): planet's core mass fraction [Mc/Mp]
-        epsilon (float or ndarray): planetary rotational rate (Omega/Omega_crit)
+#     Parameters:
+#         alpha (float or ndarray): planet's core size fraction [Rc/Rp]
+#         beta (float or ndarray): planet's core mass fraction [Mc/Mp]
+#         epsilon (float or ndarray): planetary rotational rate (Omega/Omega_crit)
 
-    Returns:
-       float or ndarray: tidal heat function of a planet's convective envelope
+#     Returns:
+#        float or ndarray: tidal heat function of a planet's convective envelope
 
-    """
-    fac0 = alpha**3.0
-    fac1 = alpha**5.0
-    fac2 = fac1 / (1 - fac1)
+#     """
+#     fac0 = alpha**3.0
+#     fac1 = alpha**5.0
+#     fac2 = fac1 / (1 - fac1)
 
-    gamma = fac0 * (1 - beta) / (beta * (1 - fac0))
-    fac3 = (1 - gamma) / gamma * fac0
+#     gamma = fac0 * (1 - beta) / (beta * (1 - fac0))
+#     fac3 = (1 - gamma) / gamma * fac0
 
-    k2q = 100 * np.pi / 63 * epsilon**2 * fac2 * (1 + fac3) / (1 + 5. / 2 * fac3)**2
+#     k2q = 100 * np.pi / 63 * epsilon**2 * fac2 * (1 + fac3) / (1 + 5. / 2 * fac3)**2
 
-    return k2q
+#     return k2q
 
 
 def k2Q_planet_core(
@@ -104,6 +147,40 @@ def k2Q_planet_core(
     den = DD * (6.0 * DD + 4.0 * AA * BB * CC * G)
     k2qcore = num / den
     return k2qcore
+
+
+def k2Q_planet_mantle(
+    G: ArrayLike,
+    alpha: ArrayLike,
+    beta: ArrayLike,
+    Mp: ArrayLike,
+    Rp: ArrayLike
+) -> ArrayLike:
+    """
+    Calculates the tidal heat function of a planet's fluid mantle (Source: Mathis, 2015).
+    Works with scalars or NumPy arrays.
+
+    Parameters:
+        G (float or ndarray): planet's mantle rigidity (very low)
+        alpha (float or ndarray): planet's mantle size fraction [Rc/Rp]
+        beta (float or ndarray): planet's mantle mass fraction [Mc/Mp]
+        Mp (float or ndarray): planet's mass [kg]
+        Rp (float or ndarray): planet's radius [m]
+
+    Returns
+        float or ndarray: Tidal heat function of a planet's rigid core.
+    """
+    gamma = alpha**3.0 * (1 - beta) / (beta * (1 - alpha**3.0))
+
+    AA = 1.0 + 2.5 * gamma**(-1.0) * alpha**3.0 * (1.0 - gamma)
+    BB = alpha**(-5.0) * (1.0 - gamma)**(-2.0)
+    CC = (38.0 * np.pi * (alpha * Rp)**4.0) / (3.0 * GCONST * (beta * Mp)**2.0)
+    DD = (2.0 / 3.0) * AA * BB * (1.0 - gamma) * (1.0 + 1.5 * gamma) - 1.5
+
+    num = np.pi * G * (3.0 + 2.0 * AA)**2.0 * BB * CC
+    den = DD * (6.0 * DD + 4.0 * AA * BB * CC * G)
+    k2qmantle = num / den
+    return k2qmantle
 
 
 # ############RODRIGUEZ 2011########################
@@ -223,16 +300,31 @@ def roche_radius_HJ(M, mp, Rp, rfac=2.7):
     return r_roche
 
 
-def roche_radius_rigid(Rp, density_primary, density_secondary):
-    """Calculate the Roche radius for a rigid satellite."""
-    # Roche radius
-    return Rp * (2 * density_primary / density_secondary)**(1.0 / 3.0)
+# def roche_radius_rigid(Rp, density_primary, density_secondary):
+#     """Calculate the Roche radius for a rigid satellite."""
+#     # Roche radius
+#     return Rp * (2 * density_primary / density_secondary)**(1.0 / 3.0)
 
 
-def roche_radius_fluid(Rp, density_primary, density_secondary):
-    """Calculate the Roche radius for a rigid satellite."""
-    # Roche radius
-    return 2.44 * Rp * (density_primary / density_secondary)**(1.0 / 3.0)
+# def roche_radius_fluid(Rp, density_primary, density_secondary):
+#     """Calculate the Roche radius for a rigid satellite."""
+#     # Roche radius
+#     return 2.44 * Rp * (density_primary / density_secondary)**(1.0 / 3.0)
+def roche_radius_from_densities(
+    planet_radius: float,
+    planet_mass: float,
+    moon_density: float,
+    moon_rigidity: Literal["fluid", "rigid"]
+) -> float:
+    """
+    Classical **Roche limit** [in the units of Rp] for a satellite around a planet.
+
+    Coefficients (classical): fluid=2.456, rigid=1.26
+
+    """
+    planet_density = density(planet_mass, planet_radius)
+    coeff = 2.456 if moon_rigidity == "fluid" else 1.26
+    return coeff * planet_radius * ((planet_density / moon_density) ** (1.0 / 3.0))
 
 
 def roche_radius_masses(
@@ -281,6 +373,41 @@ def hill_radius(
     return ap * (1 - ep) * (mp / (3.0 * M))**(1.0 / 3.0)
 
 
+def find_moon_fate(int_sols, event_names):
+    hits = []
+    for i, times in enumerate(int_sols.t_events):
+        if times.size:
+            hits.append((times[0], i))  # (first-hit time, event index)
+
+    Outputs = namedtuple('Outputs', 'time index fate prompt')
+    if hits:
+        # If multiple events could trigger, pick the earliest time
+        t_hit, idx_hit = min(hits, key=lambda x: x[0])
+        fate = event_names[idx_hit]
+        # y_hit = sols.y_events[idx_hit][0]        # state at the hit
+
+        # Example classification
+        if fate == "roche":
+            message = "Moon disrupted at Roche limit"
+        elif fate == "hill":
+            message = "Moon escaped beyond critical Hill radius"
+        else:
+            'Weird event'
+
+        prompt = f"Outcome: {message} at t = {t_hit / GYEAR:.6e} Gyr (event='{fate}')"
+
+        rt_time = t_hit
+
+        return Outputs(rt_time, idx_hit, fate, prompt)
+    else:
+        fate = 'survives'
+        idx_hit = -1
+        rt_time = int_sols.t[-1]
+        message = f"Moon survives for"
+        prompt = f"Outcome: {message} t = {rt_time / GYEAR:.6e} Gyr (event='{fate}')"
+        return Outputs(rt_time, idx_hit, fate, prompt)
+
+
 def critical_hill_radius(
     ap_hill: ArrayLike,
     ep: ArrayLike,
@@ -298,6 +425,10 @@ def critical_hill_radius(
         float or ndarray: Critical Hill radius [m].
     """
     return 0.4031 * (1 - 1.123 * ep - 0.1862 * em) * ap_hill
+
+
+def corotation_radius(Mp, Op):
+    return (GCONST * Mp / Op**2.0) ** (1.0 / 3.0)
 
 
 def alpha2beta(Mp, alpha, **args):
@@ -476,70 +607,6 @@ def power(ee, aa, KQ, Ms, Rp):
     coeff = 15.75 * aa**(-7.5)
     return coeff * keys
 # ###################DOBS-DIXON 2004#######################
-
-
-def find_moon_fate(
-    t: ArrayLike,
-    Ms: ArrayLike,
-    Mp: ArrayLike,
-    Mm: ArrayLike,
-    nm: ArrayLike,
-    am_roche: ArrayLike,
-    ap_hill: ArrayLike,
-    ep: ArrayLike,
-    em: ArrayLike
-) -> ArrayLike:
-    """Find the fate of an orbiting moon
-
-    Args:
-        t (float or np.ndarray): times of simulation
-        Ms (float or np.ndarray): Stellar mass
-        Mp (float or np.ndarray): Planetary mass
-        Mm (float or np.ndarray): Moon mass
-        nm (float or np.ndarray): Moon mean motion
-        am_roche (float or np.ndarray): Roche radius of orbiting moon
-        ap_hill (float or np.ndarray): Hill radius of host planet
-        ep (float or ndarray): Eccentricity of host planet
-        em (float or ndarray): Eccentricity of moon
-
-    Returns:
-        tuple: NamedTuple with the migration time, index of that time, and fate.
-    """
-    am = mean2axis(nm, Mp, Mm)
-
-    ap_critical = critical_hill_radius(ap_hill, ep, em)
-
-    scale = GYEAR
-    scale_label = 'Gyr'
-
-    if scale != GYEAR:
-        scale_label = 'Myr'
-
-    if np.any(am >= ap_critical):
-        pos = [i for i, a in enumerate(am) if a > ap_critical][0]
-        rt_time = t[pos] / scale
-        fate = 'escapes'
-        prompt = f'Moon {fate} the critical Hill radius in {rt_time:.6f} {scale_label}'
-    elif np.any(am <= am_roche):  # len(np.where(nm >= nm_roche)[0]) != 0:
-        pos = [i for i, a in enumerate(am) if a < am_roche][0]
-        rt_time = t[pos] / scale
-        fate = 'disrupts'
-        prompt = f'Moon {fate} at the Roche limit in {rt_time:.6f} {scale_label}'
-    # elif np.all(am >= ap_critical):
-    #     pos = [i for i, a in enumerate(am) if a > ap_critical][0]
-    #     rt_time = t[pos] / scale
-    #     fate = 'Moon located at unstable orbit'
-    #     prompt = f'Moon was located beyond the critical Hill radius in {rt_time:.6f} {scale_label}'
-    else:
-        pos = -1
-        rt_time = np.max(t) / scale
-        fate = "stalls"
-        prompt = 'Moon migrates too slow and never crosses the Hill radius or the Roche limit.'
-    # print(f'{prompt}')
-
-    Outputs = namedtuple('Outputs', 'time index fate prompt')
-
-    return Outputs(rt_time, pos, fate, prompt)
 
 
 def mu_below_T_solidus():

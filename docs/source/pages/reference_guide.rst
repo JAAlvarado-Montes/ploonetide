@@ -6,14 +6,6 @@ Ploonetide
 
 This section provides a complete API reference for the Ploonetide package, including the main simulation interface, the ODE modules, and utility tools. Use this guide to explore all classes and functions available for scientific workflows.
 
-.. toctree::
-   :maxdepth: 4
-   :caption: Modules
-   :hidden:
-
-   api/ploonetide
-
-
 Tidal Simulators
 ================
 
@@ -75,8 +67,6 @@ Physical and Orbital Functions
 Functions to calculate physical and orbital properties
 
 **Function Utilities**
-
-.. automodule:: ploonetide.utils.functions
 
 .. currentmodule:: ploonetide.utils.functions
 

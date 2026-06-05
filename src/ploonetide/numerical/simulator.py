@@ -2,6 +2,8 @@
 import numpy as np
 import warnings
 
+from ploonetide.utils.constants import *
+
 from scipy.integrate._ivp.base import OdeSolver
 from scipy.integrate import solve_ivp
 from tqdm.auto import tqdm
@@ -77,7 +79,7 @@ class Simulation:
         self.Ndim = self.N_variables
         self.quant_vec = np.concatenate([var.return_vec() for var in self.variables])
 
-    def set_diff_eq(self, calc_diff_eqs, params, ini_conds):
+    def set_diff_eq(self, calc_diff_eqs, params, ini_conds, events):
         """
         Set the differential equation function.
 
@@ -88,6 +90,7 @@ class Simulation:
         self.calc_diff_eqs = calc_diff_eqs
         self.diff_eq_kwargs = params
         self.diff_eq_ini_conds = ini_conds
+        self.events = events
 
     def set_integration_method(self, method='RK45'):
         """
@@ -98,7 +101,7 @@ class Simulation:
         """
         self.integration_method = method
 
-    def run(self, t, dt, t0=0.0):
+    def run(self, t, dt, t0=0.0, jacobian=None):
         """
         Run the simulation.
 
@@ -109,7 +112,7 @@ class Simulation:
         """
         self.time_step = dt
         self.total_time = t
-        t_span = np.array([0.000001, t])  # Avoid t0=0 for stability
+        t_span = np.array([t0, t])  # Avoid t0=0 for stability
         t_eval = np.arange(t_span[0], t_span[1], dt)
 
         self.bar_fmt = '{desc}{percentage:4.0f}%|{bar}|'\
@@ -118,34 +121,31 @@ class Simulation:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
 
-            if self.integration_method == 'LSODA':
-                from scipy.integrate import odeint
-                sols = odeint(
-                    self.calc_diff_eqs, self.quant_vec,
-                    t_eval,
-                    args=(self.diff_eq_kwargs, self.diff_eq_ini_conds),
-                    tfirst=True,
-                    mxstep=50000,
-                    mxords=20,
-                    mxordn=20,
-                    rtol=1e-10,
-                    atol=1e-10
-                )
+            y0 = np.asarray(self.quant_vec, dtype=float)
 
-                self.history = t_eval, sols.T
+            atol = np.full(y0.size, 1e-8, dtype=float)
+            atol[0] = 1e-12   # Omega_p
+            atol[1] = 1e-13   # n_p
+            atol[2] = 1e-8    # log(n_m)
 
-            else:
-                sols = solve_ivp(
-                    self.calc_diff_eqs,
-                    t_span,
-                    self.quant_vec,
-                    method=self.integration_method,
-                    vectorized=True,
-                    rtol=1e-20,
-                    min_step=1e-6,
-                    args=(self.diff_eq_kwargs, self.diff_eq_ini_conds),
-                    t_eval=t_eval,
-                    _progress_total=len(t_eval)
-                )
+            total_time = t_span[1] - t_span[0]
+            max_step = min(5.0 * MYEAR, 0.005 * total_time)
+            # max_step = 0.1 * MYEAR
 
-                self.history = sols.t, sols.y
+            sols = solve_ivp(
+                self.calc_diff_eqs,
+                t_span,
+                y0,
+                method=self.integration_method,
+                rtol=1e-6,
+                atol=atol,
+                args=(self.diff_eq_kwargs, self.diff_eq_ini_conds),
+                t_eval=None,
+                dense_output=True,
+                _progress_total=len(t_eval),
+                jac=jacobian if self.integration_method in ("Radau", "BDF", "LSODA") else None,
+                max_step=max_step,
+                events=self.events,
+            )
+
+            self.history = sols
