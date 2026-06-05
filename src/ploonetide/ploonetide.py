@@ -1662,20 +1662,40 @@ class TidalSimulation(Simulation):
                 "enabled in this release path."
             )
 
-        if self.physics_flags['planet_evolution']:
-            from ploonetide.utils.planet.evolmodels.subNeptune import build_default_k218_track
-            planet_track = build_default_k218_track(
-                closure='quadratic', t_end=integration_time)
+        integrator_args = self._build_planet_moon_integrator_args(integration_time)
+        events, event_names = self._build_planet_moon_events()
 
-            integrator_args = {
-                'parameters': self.parameters,
-                'planet_track': planet_track
-            }
-        else:
-            integrator_args = {'parameters': self.parameters}
+        super().set_diff_eq(
+            solution_planet_moon,
+            integrator_args,
+            self.initial_conds,
+            events
+        )
 
-        differential_equation = solution_planet_moon
+        if self.verbose:
+            print('\nStarting integration of moon orbital migration:\n')
 
+        super().run(integration_time, timestep, t0=t0, jacobian=jacobian)
+
+        self._store_planet_moon_results(event_names)
+
+    def _build_planet_moon_integrator_args(self, integration_time):
+        """Build the RHS argument bundle for a planet-moon integration."""
+        if not self.physics_flags['planet_evolution']:
+            return {'parameters': self.parameters}
+
+        from ploonetide.utils.planet.evolmodels.subNeptune import build_default_k218_track
+
+        planet_track = build_default_k218_track(
+            closure='quadratic', t_end=integration_time)
+
+        return {
+            'parameters': self.parameters,
+            'planet_track': planet_track
+        }
+
+    def _build_planet_moon_events(self):
+        """Build terminal Roche/Hill events and their names."""
         hm_idx = 3 if self.has_eccentricity else None
 
         event_roche = make_event_roche_log(
@@ -1693,158 +1713,112 @@ class TidalSimulation(Simulation):
             buffer=self.event_crossing_tol,
         )
 
-        events = [
-            event_roche,
-            event_hill
-        ]
-        event_names = [
-            event_roche.event_name,
-            event_hill.event_name,
-        ]
+        events = [event_roche, event_hill]
+        event_names = [event.event_name for event in events]
 
-        super().set_diff_eq(
-            differential_equation,
-            integrator_args,
-            self.initial_conds,
-            events
-        )
+        return events, event_names
+
+    def _store_planet_moon_results(self, event_names):
+        """Store solve_ivp output, fate metadata, solution table, and units."""
+        self.sols = self.history
 
         if self.verbose:
-            print('\nStarting integration of moon orbital migration:\n')
+            print("success:", self.sols.success, "|", self.sols.message)
+            print("t_events:", self.sols.t_events)
+            print("y_events shapes:", [e.shape for e in self.sols.y_events])
 
-        super().run(integration_time, timestep, t0=t0, jacobian=jacobian)
+        moon_fate = find_moon_fate(self.sols, event_names)
+        self.fate_time = u.Quantity(moon_fate.time / GYEAR, u.Gyr)
+        self.fate = moon_fate.fate
 
-        if self.system_type == 'planet-moon':
-            # Get the solutions from the integrator
-            self.sols = self.history
+        times, solutions = self._extract_planet_moon_solution_arrays(moon_fate)
+        self.solutions = self._build_planet_moon_solution_table(times, solutions)
+        self.solution_units = self._build_planet_moon_solution_units()
 
-            if self.verbose:
-                print("success:", self.sols.success, "|", self.sols.message)
-                print("t_events:", self.sols.t_events)          # list of arrays, one per event
-                print("y_events shapes:", [e.shape for e in self.sols.y_events])
+        if self.verbose:
+            print(f'{moon_fate.prompt}')
 
-            # Find the fate of the moon: disrupts, escapes, or stalls
-            moon_fate = find_moon_fate(self.sols, event_names)
-            self.fate_time = u.Quantity(moon_fate.time / GYEAR, u.Gyr)
-            self.fate = moon_fate.fate
+    def _extract_planet_moon_solution_arrays(self, moon_fate):
+        """Return time/state arrays, including the terminal event point if needed."""
+        if self.fate == 'survives':
+            return self.sols.t, self.sols.y
 
-            if self.fate == 'survives':
-                times, solutions = self.sols.t, self.sols.y
-            else:
-                # Create a copy of times (t) and solutions (y)
-                t = self.sols.t.copy()
-                y = self.sols.y.copy()
+        t = self.sols.t.copy()
+        y = self.sols.y.copy()
 
-                # Find the time and state of the event.
-                # Use y_events rather than sol.sol(t_hit), because y_events is the
-                # root-refined event state returned by solve_ivp.
-                t_hit = self.sols.t_events[moon_fate.index][0]
-                y_hit = self.sols.y_events[moon_fate.index][0]
+        # Use y_events rather than sol.sol(t_hit), because y_events is the
+        # root-refined event state returned by solve_ivp.
+        t_hit = self.sols.t_events[moon_fate.index][0]
+        y_hit = self.sols.y_events[moon_fate.index][0]
 
-                # Append the event point if it is not already present.
-                if np.isclose(t[-1], t_hit, rtol=0.0, atol=1e-9 * max(abs(t_hit), 1.0)):
-                    t_end = t.copy()
-                    y_end = y.copy()
-                    t_end[-1] = t_hit
-                    y_end[:, -1] = y_hit
-                else:
-                    t_end = np.append(t, t_hit)
-                    y_end = np.column_stack([y, y_hit])
+        if np.isclose(t[-1], t_hit, rtol=0.0, atol=1e-9 * max(abs(t_hit), 1.0)):
+            t_end = t.copy()
+            y_end = y.copy()
+            t_end[-1] = t_hit
+            y_end[:, -1] = y_hit
+        else:
+            t_end = np.append(t, t_hit)
+            y_end = np.column_stack([y, y_hit])
 
-                # Ensure strictly increasing time order.
-                order = np.argsort(t_end)
-                times = t_end[order]
-                solutions = y_end[:, order]
+        order = np.argsort(t_end)
+        return t_end[order], y_end[:, order]
 
-            planet_omega = solutions[0]
-            planet_mean_motion = solutions[1]
+    def _build_planet_moon_solution_table(self, times, solutions):
+        """Build the public planet-moon solutions DataFrame."""
+        moon_mean_motion = np.exp(solutions[2])
+        moon_semi_ma = mean2axis(
+            moon_mean_motion,
+            self.planet_mass.to_value(u.kg),
+            self.moon_mass.to_value(u.kg)
+        )
 
-            # Recover the moon mean motion (nm) from inside the log(nm)
-            moon_mean_motion = np.exp(solutions[2])
+        data = {
+            'Times': times,
+            'Planet Omega': solutions[0],
+            'Planet Mean Motion': solutions[1],
+            'Moon Mean Motion': moon_mean_motion,
+            'Moon Semimajor Axis': moon_semi_ma,
+        }
 
-            # Calculate the moon semimajor axis using nm
-            moon_semi_ma = mean2axis(
-                moon_mean_motion,
-                self.planet_mass.to_value(u.kg),
-                self.moon_mass.to_value(u.kg)
+        if self.has_eccentricity:
+            hm = np.maximum(solutions[3], 0.0)
+            moon_eccentricity = np.sqrt(hm)
+            data.update(
+                {
+                    'Moon Pericentre': moon_semi_ma * (1.0 - moon_eccentricity),
+                    'Moon Apocentre': moon_semi_ma * (1.0 + moon_eccentricity),
+                    'Moon Eccentricity Squared': hm,
+                    'Moon Eccentricity': moon_eccentricity,
+                }
             )
 
-            if self.has_eccentricity and self.has_obliquity:
-                hm = np.maximum(solutions[3], 0.0)
-                moon_eccentricity = np.sqrt(hm)
+        if self.has_obliquity:
+            obliquity_idx = 4 if self.has_eccentricity else 3
+            data['Moon Obliquity'] = solutions[obliquity_idx]
 
-                self.solutions = pd.DataFrame(
-                    {
-                        'Times': times,
-                        'Planet Omega': solutions[0],
-                        'Planet Mean Motion': solutions[1],
-                        'Moon Mean Motion': moon_mean_motion,
-                        'Moon Semimajor Axis': moon_semi_ma,
-                        'Moon Pericentre': moon_semi_ma * (1.0 - moon_eccentricity),
-                        'Moon Apocentre': moon_semi_ma * (1.0 + moon_eccentricity),
-                        'Moon Eccentricity Squared': hm,
-                        'Moon Eccentricity': moon_eccentricity,
-                        'Moon Obliquity': solutions[4]
-                    }
-                )
+        solutions_df = pd.DataFrame(data)
+        solutions_df.index.name = 'Simulation Step'
 
-            elif self.has_eccentricity:
-                hm = np.maximum(solutions[3], 0.0)
-                moon_eccentricity = np.sqrt(hm)
+        return solutions_df
 
-                self.solutions = pd.DataFrame(
-                    {
-                        'Times': times,
-                        'Planet Omega': solutions[0],
-                        'Planet Mean Motion': solutions[1],
-                        'Moon Mean Motion': moon_mean_motion,
-                        'Moon Semimajor Axis': moon_semi_ma,
-                        'Moon Pericentre': moon_semi_ma * (1.0 - moon_eccentricity),
-                        'Moon Apocentre': moon_semi_ma * (1.0 + moon_eccentricity),
-                        'Moon Eccentricity Squared': hm,
-                        'Moon Eccentricity': moon_eccentricity,
-                    }
-                )
+    def _build_planet_moon_solution_units(self):
+        """Build units metadata for the public planet-moon solutions table."""
+        solution_units = {
+            'Times': u.s,
+            'Planet Omega': u.s**-1,
+            'Planet Mean Motion': u.s**-1,
+            'Moon Mean Motion': u.s**-1,
+            'Moon Semimajor Axis': u.m,
+        }
 
-            elif self.has_obliquity:
-                self.solutions = pd.DataFrame(
-                    {
-                        'Times': times,
-                        'Planet Omega': solutions[0],
-                        'Planet Mean Motion': solutions[1],
-                        'Moon Mean Motion': moon_mean_motion,
-                        'Moon Semimajor Axis': moon_semi_ma,
-                        'Moon Obliquity': solutions[3]
-                    }
-                )
+        if self.initial_conds['hm_ini'] != 0.0:
+            solution_units['Moon Eccentricity'] = u.Unit('')
+            solution_units['Moon Surface Temperature'] = u.K
 
-            else:
-                self.solutions = pd.DataFrame(
-                    {
-                        'Times': times,
-                        'Planet Omega': planet_omega,
-                        'Planet Mean Motion': planet_mean_motion,
-                        'Moon Mean Motion': moon_mean_motion,
-                        'Moon Semimajor Axis': moon_semi_ma
-                    }
-                )
+        if self.initial_conds['psim_ini'] != 0.0:
+            solution_units['Moon Obliquity'] = u.Unit('')
 
-            self.solutions.index.name = 'Simulation Step'
-
-            self.solution_units = {
-                'Times': u.s,
-                'Planet Omega': u.s**-1,
-                'Planet Mean Motion': u.s**-1,
-                'Moon Mean Motion': u.s**-1,
-                'Moon Semimajor Axis': u.m,
-            }
-            if self.initial_conds['hm_ini'] != 0.0:
-                self.solution_units['Moon Eccentricity'] = u.Unit('')
-                self.solution_units['Moon Surface Temperature'] = u.K
-            if self.initial_conds['psim_ini'] != 0.0:
-                self.solution_units['Moon Obliquity'] = u.Unit('')
-            if self.verbose:
-                print(f'{moon_fate.prompt}')
+        return solution_units
 
     def compute_moon_surface_temperature(self):
         """Compute the surface temperature of a moon for a given moon orbital position
