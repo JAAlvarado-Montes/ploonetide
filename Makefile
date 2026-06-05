@@ -92,14 +92,14 @@ check-format: ; $(CMD) black --check $(PYMODULE) $(TESTS)
 # ----------------------------
 # Versioning & releasing
 
-## Bump patch version and tag Git as vX.Y.Z
-bump:		; bumpver update --patch
+## Bump patch version and tag Git as X.Y.Z
+bump:		; $(CMD) bumpver update --patch
 
-## Bump minor version and tag Git as vX.Y.Z
-bump-minor:	; bumpver update --minor
+## Bump minor version and tag Git as X.Y.Z
+bump-minor:	; $(CMD) bumpver update --minor
 
-## Bump major version and tag Git as vX.Y.Z
-bump-major:	; bumpver update --major
+## Bump major version and tag Git as X.Y.Z
+bump-major:	; $(CMD) bumpver update --major
 
 ## Push the new tag and commit to GitHub, after confirmation
 release:
