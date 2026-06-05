@@ -8,7 +8,7 @@ This guide is for developers working on **ploonetide**. It explains how to set u
 Environment Setup
 -----------------
 
-To get started, simply run:
+To get started, run:
 
 .. code-block:: bash
 
@@ -16,22 +16,42 @@ To get started, simply run:
 
 This command will:
 
-- Check if **Poetry** is installed. If not, it installs Poetry automatically using pip.
-- Detect whether you already have an active virtual environment.
-- If no environment is active:
-  - It offers to create a new **Poetry** environment (recommended), or
-  - Creates a **Conda** environment named `ploonetide-env` using the exported dependencies from `pyproject.toml`.
-- Install **ploonetide** in **editable mode**, so that changes to the source code are immediately reflected without reinstallation.
+- Show the currently active Python environment.
+- Refuse to install into Conda `base`.
+- Offer an explicit install target:
+  - **Poetry** virtual environment (recommended),
+  - **Conda** environment named `ploonetide-env`, or
+  - the current active environment, if it is not Conda `base`.
+- Install **ploonetide** in **editable mode**, so source-code changes are
+  immediately reflected without reinstalling.
 - Install all core and development dependencies inside the selected environment.
-- Automatically clean up temporary Conda export files (`conda_environment.yml`, `conda_requirements.txt`).
+- Install notebook tools used by developers, including `jupyterlab`,
+  `ipython`, `ipywidgets`, and `ipympl`.
+
+You can also choose the install target non-interactively:
+
+.. code-block:: bash
+
+   make install INSTALL_BACKEND=poetry
+   make install INSTALL_BACKEND=conda
+   make install INSTALL_BACKEND=current
+
+The supported values are `poetry`, `conda`, `current`, and `skip`.
 
 .. note::
 
-   If you select the Conda option, you will still need to activate the environment manually after creation:
+   If you select the Conda option, activate the environment manually after
+   creation:
 
    .. code-block:: bash
 
       conda activate ploonetide-env
+
+   You can override the Conda environment name and Python version:
+
+   .. code-block:: bash
+
+      make install INSTALL_BACKEND=conda CONDA_ENV_NAME=my-env CONDA_PYTHON=3.12
 
 Makefile Commands
 -----------------
@@ -102,6 +122,11 @@ Important Notes
 ---------------
 
 - **Editable installation**: `ploonetide` is installed in editable mode, so any changes to the codebase are immediately usable without reinstalling.
+- **Notebook tools**: the developer install includes JupyterLab and related
+  notebook packages through the `dev` extra.
+- **Conda base safety**: `make install` refuses to install into Conda `base`.
+  Choose the Poetry or Conda install target instead, or activate a dedicated
+  environment before using `INSTALL_BACKEND=current`.
 - **poetry.lock**: This file is generated automatically when running `make install` with Poetry. It is **not required** for collaborative development and will be automatically removed by `make clean`.
 - **Clean PRs**: Before pushing to GitHub, always run:
 

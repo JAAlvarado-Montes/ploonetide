@@ -9,7 +9,9 @@ POETRY := $(shell command -v poetry 2>/dev/null)
 CONDA := $(shell command -v conda 2>/dev/null)
 
 CMD := $(if $(POETRY),poetry run,python -m)
-INSTALL_CMD := $(if $(POETRY),poetry install --with dev --extras "dev",pip install -e .[dev])
+INSTALL_BACKEND ?=
+CONDA_ENV_NAME ?= ploonetide-env
+CONDA_PYTHON ?= 3.11
 VERSION := $(shell grep '^current_version =' pyproject.toml | sed -E 's/.*"([^"]+)"/\1/')
 TAG := $(VERSION)
 
@@ -22,44 +24,108 @@ TAG := $(VERSION)
 # Installation & Environment Setup
 
 install:
-	@echo "🔍 Checking for Poetry..."
-	@if ! command -v poetry >/dev/null 2>&1; then \
-		echo "⚠️ Poetry not found. Installing..."; \
-		pip install --user poetry; \
-	else \
-		echo "✅ Poetry found."; \
-	fi
-
 	@echo "🔍 Checking for active environment..."
-	@if [ -z "$$VIRTUAL_ENV" ] && [ -z "$$CONDA_PREFIX" ]; then \
-		echo "⚠️ No active environment detected."; \
-		echo "💡 Create one now?"; \
-		echo "   [1] Poetry (recommended)"; \
-		if command -v conda >/dev/null 2>&1; then echo "   [2] Conda"; fi; \
-		read -p "👉 Choose [1/2/skip]: " choice; \
-		if [ "$$choice" = "1" ]; then \
-			poetry env use python3 || poetry env use python; \
-			poetry install --with dev --extras "dev"; \
-			echo "✅ Poetry environment created."; \
-			echo "👉 Run: poetry shell"; \
-			exit 0; \
-		elif [ "$$choice" = "2" ] && command -v conda >/dev/null 2>&1; then \
-			poetry export --with dev --extras "dev" --format=requirements.txt --without-hashes -o conda_requirements.txt || echo '[]' > conda_requirements.txt; \
-			echo "name: ploonetide-env\nchannels:\n  - conda-forge\n  - defaults\ndependencies:\n  - python=3.11\n  - pip\n  - pip:\n    - -r conda_requirements.txt" > conda_environment.yml; \
-			conda env create -f conda_environment.yml; \
-			echo "✅ Conda environment 'ploonetide-env' created."; \
-			echo "👉 Installing ploonetide and dev dependencies..."; \
-			conda run -n ploonetide-env pip install -e .[dev]; \
-			rm -f conda_requirements.txt conda_environment.yml; \
-			echo "✅ Environment ready. Run: conda activate ploonetide-env"; \
-			exit 0; \
-		else \
-			echo "⏭️ Skipping. Make sure to activate an environment manually."; \
-		fi \
+	@if [ -n "$$VIRTUAL_ENV" ]; then \
+		echo "✅ Virtualenv active: $$VIRTUAL_ENV"; \
+	elif [ -n "$$CONDA_PREFIX" ]; then \
+		echo "✅ Conda environment active: $${CONDA_DEFAULT_ENV:-unknown} ($$CONDA_PREFIX)"; \
+		if [ "$$CONDA_DEFAULT_ENV" = "base" ]; then \
+			echo "⚠️ Conda base is active. make install will not install into base."; \
+		fi; \
 	else \
-		echo "✅ Environment active: $$VIRTUAL_ENV$$CONDA_PREFIX"; \
-		$(INSTALL_CMD); \
-	fi
+		echo "⚠️ No active environment detected."; \
+	fi; \
+	backend="$(INSTALL_BACKEND)"; \
+	if [ -z "$$backend" ]; then \
+		echo "💡 Choose a developer install target:"; \
+		echo "   [1] Poetry virtual environment (recommended)"; \
+		echo "   [2] Conda environment: $(CONDA_ENV_NAME)"; \
+		current_allowed=0; \
+		if [ -n "$$VIRTUAL_ENV" ] || { [ -n "$$CONDA_PREFIX" ] && [ "$$CONDA_DEFAULT_ENV" != "base" ]; }; then \
+			echo "   [3] Current active environment"; \
+			current_allowed=1; \
+		fi; \
+		echo "   [skip] Do nothing"; \
+		if [ "$$current_allowed" = "1" ]; then \
+			printf "👉 Choose [1/2/3/skip]: "; \
+		else \
+			printf "👉 Choose [1/2/skip]: "; \
+		fi; \
+		read choice; \
+		case "$$choice" in \
+			1) backend="poetry" ;; \
+			2) backend="conda" ;; \
+			3) \
+				if [ "$$current_allowed" = "1" ]; then \
+					backend="current"; \
+				else \
+					echo "❌ Current environment install is not available."; \
+					exit 1; \
+				fi ;; \
+			skip|"") backend="skip" ;; \
+			*) echo "❌ Unknown install choice: $$choice"; exit 1 ;; \
+		esac; \
+	fi; \
+	case "$$backend" in \
+		poetry) \
+			echo "🔍 Checking for Poetry..."; \
+			if ! command -v poetry >/dev/null 2>&1; then \
+				echo "⚠️ Poetry not found. Installing with python -m pip --user..."; \
+				python -m pip install --user poetry; \
+			else \
+				echo "✅ Poetry found."; \
+			fi; \
+			echo "📦 Installing ploonetide with Poetry..."; \
+			env -u VIRTUAL_ENV -u CONDA_PREFIX -u CONDA_DEFAULT_ENV \
+				POETRY_VIRTUALENVS_CREATE=true poetry env use python3 \
+				|| env -u VIRTUAL_ENV -u CONDA_PREFIX -u CONDA_DEFAULT_ENV \
+					POETRY_VIRTUALENVS_CREATE=true poetry env use python; \
+			env -u VIRTUAL_ENV -u CONDA_PREFIX -u CONDA_DEFAULT_ENV \
+				POETRY_VIRTUALENVS_CREATE=true poetry install --with dev --extras "dev"; \
+			echo "✅ Poetry environment ready: $$(env -u VIRTUAL_ENV -u CONDA_PREFIX -u CONDA_DEFAULT_ENV poetry env info --path)"; \
+			echo "👉 Run commands with: poetry run <command>"; \
+			;; \
+		conda) \
+			if ! command -v conda >/dev/null 2>&1; then \
+				echo "❌ Conda not found. Install Conda or choose INSTALL_BACKEND=poetry."; \
+				exit 1; \
+			fi; \
+			if conda env list | awk '{print $$1}' | grep -qx "$(CONDA_ENV_NAME)"; then \
+				echo "✅ Conda environment '$(CONDA_ENV_NAME)' already exists."; \
+			else \
+				echo "📦 Creating Conda environment '$(CONDA_ENV_NAME)'..."; \
+				conda create -y -n "$(CONDA_ENV_NAME)" python="$(CONDA_PYTHON)" pip; \
+			fi; \
+			echo "📦 Installing ploonetide into Conda environment '$(CONDA_ENV_NAME)'..."; \
+			conda run -n "$(CONDA_ENV_NAME)" python -m pip install -e ".[dev]"; \
+			echo "✅ Conda environment ready."; \
+			echo "👉 Activate with: conda activate $(CONDA_ENV_NAME)"; \
+			;; \
+		current) \
+			if [ -n "$$CONDA_PREFIX" ] && [ "$$CONDA_DEFAULT_ENV" = "base" ]; then \
+				echo "❌ Refusing to install into Conda base."; \
+				echo "👉 Choose INSTALL_BACKEND=poetry or INSTALL_BACKEND=conda."; \
+				exit 1; \
+			fi; \
+			if [ -z "$$VIRTUAL_ENV" ] && [ -z "$$CONDA_PREFIX" ]; then \
+				echo "❌ No active environment for INSTALL_BACKEND=current."; \
+				exit 1; \
+			fi; \
+			echo "📦 Installing ploonetide into the current active environment..."; \
+			python -m pip install -e ".[dev]"; \
+			echo "✅ Current environment ready."; \
+			;; \
+		skip) \
+			echo "⏭️ Install skipped."; \
+			;; \
+		*) \
+			echo "❌ Unknown INSTALL_BACKEND='$$backend'."; \
+			echo "👉 Use poetry, conda, current, or skip."; \
+			exit 1; \
+			;; \
+	esac
+	@echo "🔎 Final environment status:"
+	@$(MAKE) env
 
 env:
 	@echo "🔍 Python:       $$(which python)"
@@ -67,6 +133,7 @@ env:
 	@echo "🔍 Conda:        $(CONDA)"
 	@echo "🔍 VIRTUAL_ENV:  $$VIRTUAL_ENV"
 	@echo "🔍 CONDA_PREFIX: $$CONDA_PREFIX"
+	@echo "🔍 CONDA_DEFAULT_ENV: $${CONDA_DEFAULT_ENV:-}"
 
 export-conda-env:
 	@echo "📦 Exporting conda_environment.yml from pyproject.toml..."

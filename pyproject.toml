@@ -85,6 +85,7 @@ dev = [
     "black", "bumpver", "flake8", "ghp-import", "isort", "mypy",
     "pylint", "pytest", "pytest-cov", "pytest-doctestplus",
     "pytest-remotedata", "pytest-xdist",
+    "ipympl", "ipython", "ipywidgets", "jupyterlab",
     "numpydoc", "sphinx-automodapi", "sphinxcontrib-rawfiles",
     "sphinxcontrib-restbuilder", "pydata-sphinx-theme",
     "myst-parser", "myst-nb", "sphinx", "furo", "sphinx-autobuild",
