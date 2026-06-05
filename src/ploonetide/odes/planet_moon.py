@@ -1869,23 +1869,49 @@ def jacobian(t, y, integrator_args, initial_conds):
 def solution_planet_moon(t, y, integrator_args, initial_conds):
     """Coupled ODE system for the star--planet--moon tidal problem.
 
-    Circular state vector:
-        y[0] = op
-        y[1] = npp
-        y[2] = log(nm)
+    Parameters
+    ----------
+    t : float
+        time vector
+    y : list
+        variables vector
+    integrator_args : TYPE
+        Description
+    initial_conds : TYPE
+        Description
 
-    Eccentric state vector:
+    Examples
+    --------
+
+    Circular state vector
+        | y[0] = op
+        | y[1] = npp
+        | y[2] = log(nm)
+
+    Eccentric state vector
         y[3] = hm = em**2
 
     Obliquity-only state vector:
         y[3] = psim
 
     Eccentric + obliquity state vector:
-        y[3] = hm = em**2
-        y[4] = psim
+        | y[3] = hm = em**2
+        | y[4] = psim
 
     The returned vector always matches len(y). The eccentric component
     is dhm/dt rather than dem/dt.
+
+    Returns
+    -------
+    list
+        planet-moon solutions vector
+
+    Raises
+    ------
+    FloatingPointError
+        Description
+    ValueError
+        Description
     """
     y = np.asarray(y, dtype=float)
     parameters = integrator_args["parameters"]
