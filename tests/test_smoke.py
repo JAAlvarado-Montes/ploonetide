@@ -49,6 +49,7 @@ def test_valid_planet_moon_simulation_initializes(monkeypatch, tmp_path):
     )
 
     assert simulation.system_type == "planet-moon"
+    assert simulation.integration_method == "RK45"
     assert math.isfinite(simulation.moon_density.value)
     assert math.isfinite(simulation.moon_radius.value)
     assert simulation.moon_rigidity in {"fluid", "rigid"}

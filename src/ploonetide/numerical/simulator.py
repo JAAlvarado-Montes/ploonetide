@@ -2,11 +2,12 @@
 import numpy as np
 import warnings
 
-from ploonetide.utils.constants import *
+from ploonetide.utils.constants import MYEAR
 
-from scipy.integrate._ivp.base import OdeSolver
 from scipy.integrate import solve_ivp
-from tqdm.auto import tqdm
+
+# from scipy.integrate._ivp.base import OdeSolver
+# from tqdm.auto import tqdm
 
 # === Monkey-patch OdeSolver to include tqdm progress bar ===
 
@@ -73,11 +74,26 @@ class Simulation:
         variables (list): List of Variable instances
     """
 
+    supported_integration_methods = (
+        "RK45",
+        "RK23",
+        "DOP853",
+        "Radau",
+        "BDF",
+        "LSODA",
+    )
+
     def __init__(self, variables):
-        self.variables = variables
+        self.variables = list(variables)
+        if not self.variables:
+            raise ValueError("Simulation requires at least one variable.")
+
         self.N_variables = len(self.variables)
         self.Ndim = self.N_variables
-        self.quant_vec = np.concatenate([var.return_vec() for var in self.variables])
+        self.quant_vec = np.concatenate(
+            [var.return_vec() for var in self.variables]
+        )
+        self.set_integration_method()
 
     def set_diff_eq(self, calc_diff_eqs, params, ini_conds, events):
         """
@@ -87,6 +103,9 @@ class Simulation:
             calc_diff_eqs: Callable returning dy/dt
             **kwargs: Additional arguments passed to the function
         """
+        if not callable(calc_diff_eqs):
+            raise TypeError("calc_diff_eqs must be callable.")
+
         self.calc_diff_eqs = calc_diff_eqs
         self.diff_eq_kwargs = params
         self.diff_eq_ini_conds = ini_conds
@@ -97,9 +116,70 @@ class Simulation:
         Set the integration method.
 
         Args:
-            method (str): One of ['RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA']
+            method (str): Integration method name.
         """
-        self.integration_method = method
+        method_lookup = {
+            valid_method.lower(): valid_method
+            for valid_method in self.supported_integration_methods
+        }
+        try:
+            self.integration_method = method_lookup[method.lower()]
+        except (AttributeError, KeyError):
+            methods = ", ".join(self.supported_integration_methods)
+            raise ValueError(
+                f"integration method must be one of {methods}; got {method!r}."
+            ) from None
+
+    @staticmethod
+    def _as_finite_float(name, value):
+        """Return a finite scalar float or raise a clear ValueError."""
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"{name} must be a finite scalar.") from None
+
+        if not np.isfinite(value):
+            raise ValueError(f"{name} must be a finite scalar.")
+
+        return value
+
+    def _validate_run_inputs(self, t, dt, t0):
+        """Validate integration inputs before calling solve_ivp."""
+        if not hasattr(self, "calc_diff_eqs"):
+            raise RuntimeError(
+                "Differential equation must be configured with set_diff_eq() "
+                "before run()."
+            )
+
+        t = self._as_finite_float("t", t)
+        dt = self._as_finite_float("dt", dt)
+        t0 = self._as_finite_float("t0", t0)
+
+        if dt <= 0.0:
+            raise ValueError("dt must be positive.")
+        if t <= t0:
+            raise ValueError("t must be greater than t0.")
+
+        y0 = np.asarray(self.quant_vec, dtype=float)
+        if y0.size == 0:
+            raise ValueError("initial state vector must not be empty.")
+        if not np.all(np.isfinite(y0)):
+            raise ValueError(
+                "initial state vector must contain finite values."
+            )
+
+        return t, dt, t0, y0
+
+    @staticmethod
+    def _build_absolute_tolerance(y0):
+        """Build a tolerance vector with legacy defaults where possible."""
+        atol = np.full(y0.size, 1e-8, dtype=float)
+        legacy_tolerances = (1e-12, 1e-13, 1e-8)
+
+        for idx, value in enumerate(legacy_tolerances[:y0.size]):
+            atol[idx] = value
+
+        return atol
 
     def run(self, t, dt, t0=0.0, jacobian=None):
         """
@@ -110,6 +190,7 @@ class Simulation:
             dt (float): Timestep
             t0 (float): Initial time (default 0.0)
         """
+        t, dt, t0, y0 = self._validate_run_inputs(t, dt, t0)
         self.time_step = dt
         self.total_time = t
         t_span = np.array([t0, t])  # Avoid t0=0 for stability
@@ -121,12 +202,7 @@ class Simulation:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
 
-            y0 = np.asarray(self.quant_vec, dtype=float)
-
-            atol = np.full(y0.size, 1e-8, dtype=float)
-            atol[0] = 1e-12   # Omega_p
-            atol[1] = 1e-13   # n_p
-            atol[2] = 1e-8    # log(n_m)
+            atol = self._build_absolute_tolerance(y0)
 
             total_time = t_span[1] - t_span[0]
             max_step = min(5.0 * MYEAR, 0.005 * total_time)
@@ -143,7 +219,9 @@ class Simulation:
                 t_eval=None,
                 dense_output=True,
                 _progress_total=len(t_eval),
-                jac=jacobian if self.integration_method in ("Radau", "BDF", "LSODA") else None,
+                jac=jacobian
+                if self.integration_method in ("Radau", "BDF", "LSODA")
+                else None,
                 max_step=max_step,
                 events=self.events,
             )
