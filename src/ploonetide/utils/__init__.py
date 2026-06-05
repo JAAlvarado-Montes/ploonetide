@@ -146,12 +146,15 @@ def canonic_units(*, uM=None, uL=None, uT=None, G=6.6740831e-11):
     return uM, uL, uT
 
 
-# THIS IS THE FIXED-POINT FUNCTION FOR DOING THE "k" ITERATIONS TO
-# REFINE THE ROOT'S VALUE.
-def fpi(t, k, ll, n):
-    for i in np.arange(k):
-        # print(i,g(t,l,n))
-        t = g(t, ll, n)
+# THIS IS THE FIXED-POINT FUNCTION FOR DOING THE "k" ITERATIONS TO REFINE
+# THE ROOT'S VALUE. The iteration map must be supplied explicitly; older
+# versions implicitly referenced a missing global named ``g``.
+def fpi(t, k, step, n):
+    if not callable(step):
+        raise TypeError("step must be a callable with signature step(t, n).")
+
+    for _ in np.arange(k):
+        t = step(t, n)
     return t
 
 
