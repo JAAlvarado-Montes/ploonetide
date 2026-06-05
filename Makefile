@@ -188,6 +188,7 @@ release:
 # Path configuration
 CMD := poetry run
 DOCS_DIR := docs
+DOCS_BUILD_DIR := $(DOCS_DIR)/_build/html
 SRC_DIR := src/ploonetide
 SOURCE_DIR := $(DOCS_DIR)/source
 PAGES_DIR := $(SOURCE_DIR)/pages
@@ -215,14 +216,16 @@ docs:
 	@echo "🧹 Cleaning old autosummary and API files..."
 	rm -rf $(AUTOSUMMARY_DIR) $(API_DIR)
 
-	@echo "🌐 Starting live documentation server at http://127.0.0.1:8000"
-	@sh -c "sleep 5 && python -c 'import webbrowser; webbrowser.open(\"http://127.0.0.1:8000\")'" &
-
 	@echo "📦 Running sphinx-apidoc to generate API .rst files..."
-	@$(CMD) sphinx-apidoc -o $(SOURCE_DIR)/pages/api $(SRC_DIR) --force --separate
+	@$(CMD) sphinx-apidoc -o $(API_DIR) $(SRC_DIR) --force --separate
 
 	@echo "📄 Generating autosummary stubs for index.rst..."
-	@$(CMD) sphinx-autogen -o $(SOURCE_DIR)/_autosummary $(SOURCE_DIR)/index.rst
+	@$(CMD) sphinx-autogen -o $(AUTOSUMMARY_DIR) $(SOURCE_DIR)/index.rst
 
+	@echo "🌐 Starting live documentation server at http://127.0.0.1:8000"
 	@echo "🔧 Building docs with sphinx-autobuild..."
-	@$(CMD) sphinx-autobuild $(SOURCE_DIR) docs/_build/html
+	@$(CMD) sphinx-autobuild \
+		--open-browser \
+		--ignore "$(abspath $(API_DIR))" \
+		--ignore "$(abspath $(AUTOSUMMARY_DIR))" \
+		$(SOURCE_DIR) $(DOCS_BUILD_DIR)
