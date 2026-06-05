@@ -18,7 +18,6 @@ from ploonetide.utils.functions import *
 from ploonetide.utils.events import *
 from ploonetide.odes.planet_moon import solution_planet_moon, jacobian
 from ploonetide.odes.star_planet import solution_star_planet
-from ploonetide.forecaster.mr_forecast import Mstat2R
 from ploonetide.numerical.simulator import Variable, Simulation
 
 from ploonetide.utils.moon.moon_physics import (
@@ -804,7 +803,6 @@ class TidalSimulation(Simulation):
             raise ValueError("Stellar luminosity must be positive.")
         self._star_luminosity = value
         if not isinstance(self._star_luminosity, u.Quantity):
-            print("popito")
             self._star_luminosity = u.Quantity(value, u.W)
 
     @property
@@ -892,6 +890,8 @@ class TidalSimulation(Simulation):
     @property
     def planet_radius(self):
         if pd.isnull(self._planet_radius):
+            from ploonetide.forecaster.mr_forecast import Mstat2R
+
             planet_radius, _, _ = Mstat2R(
                 mean=self.planet_mass.value, std=0.1, unit='Jupiter',
                 sample_size=200, classify='Yes'
@@ -908,6 +908,8 @@ class TidalSimulation(Simulation):
         self._planet_radius = value
         if not isinstance(self._planet_radius, u.Quantity):
             if not value:
+                from ploonetide.forecaster.mr_forecast import Mstat2R
+
                 self._planet_radius, _, _ = Mstat2R(
                     mean=self.planet_mass.value, std=0.1, unit='Jupiter',
                     sample_size=200, classify='Yes'
@@ -917,6 +919,8 @@ class TidalSimulation(Simulation):
     @property
     def planet_core_radius(self):
         if pd.isnull(self._planet_core_radius):
+            from ploonetide.forecaster.mr_forecast import Mstat2R
+
             planet_core_radius, _, _ = Mstat2R(
                 mean=self.planet_core_mass.value, std=0.1, unit='Earth',
                 sample_size=200, classify='Yes'
@@ -933,6 +937,8 @@ class TidalSimulation(Simulation):
         self._planet_core_radius = value
         if not isinstance(self._planet_core_radius, u.Quantity):
             if not value:
+                from ploonetide.forecaster.mr_forecast import Mstat2R
+
                 self._planet_core_radius, _, _ = Mstat2R(
                     mean=self.planet_core_mass.value, std=0.1, unit='Earth',
                     sample_size=200, classify='Yes'
@@ -990,11 +996,9 @@ class TidalSimulation(Simulation):
     def planet_k2q(self):
         if not self._planet_evolution:
             if self._planet_energy_dissipation_fix_value:
-                print('Planet does not evolve and dissipation is constant')
                 return self.planet_fixed_properties['planet_k2q']
 
             else:
-                print('Planet does not evolve and dissipation is fixed with models')
                 k2q_planet_core = 0.0
                 k2q_planet_mantle = 0.0
                 k2q_planet_envelope = 0.0
@@ -1030,10 +1034,8 @@ class TidalSimulation(Simulation):
                 return k2q_planet_core + k2q_planet_mantle + k2q_planet_envelope
         else:
             if self._planet_energy_dissipation_fix_value:
-                print('Planet evolves but dissipation is constant')
                 return self.planet_fixed_properties['planet_k2q']
             else:
-                print('Planet evolves and dissipation is not constant')
                 return 'This is not a static property'
 
     @property
@@ -1938,6 +1940,9 @@ class TidalSimulation(Simulation):
             close_plot (bool, optional): Close the generated plot
             polar_projection (bool, optional): Use a polar projection for the plot
         """
+
+        import matplotlib.pyplot as plt
+
         if self.system_type == 'planet-moon':
             solutions = self.solutions
 

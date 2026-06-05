@@ -2,6 +2,7 @@
 
 import importlib
 import math
+import sys
 
 import pytest
 
@@ -14,6 +15,20 @@ def test_public_import_exposes_version_and_simulation(monkeypatch, tmp_path):
 
     assert ploonetide.__version__
     assert ploonetide.TidalSimulation.__name__ == "TidalSimulation"
+
+
+def test_public_import_avoids_heavy_optional_modules(monkeypatch, tmp_path):
+    """Basic import should not eagerly load plotting or HDF5 machinery."""
+    monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "matplotlib"))
+    sys.modules.pop("ploonetide", None)
+    sys.modules.pop("ploonetide.ploonetide", None)
+    sys.modules.pop("matplotlib.pyplot", None)
+    sys.modules.pop("h5py", None)
+
+    importlib.import_module("ploonetide")
+
+    assert "matplotlib.pyplot" not in sys.modules
+    assert "h5py" not in sys.modules
 
 
 def test_valid_planet_moon_simulation_initializes(monkeypatch, tmp_path):
@@ -37,6 +52,27 @@ def test_valid_planet_moon_simulation_initializes(monkeypatch, tmp_path):
     assert math.isfinite(simulation.moon_density.value)
     assert math.isfinite(simulation.moon_radius.value)
     assert simulation.moon_rigidity in {"fluid", "rigid"}
+
+
+def test_planet_k2q_property_is_silent(monkeypatch, tmp_path, capsys):
+    """Property access should not write status messages to stdout."""
+    monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "matplotlib"))
+
+    from ploonetide import TidalSimulation
+
+    simulation = TidalSimulation(
+        system_type="planet-moon",
+        planet_orbperiod=20,
+        moon_fractions=(0.5, 0.5, 0.0),
+        moon_semimaxis=2.0,
+        verbose=False,
+    )
+    capsys.readouterr()
+
+    _ = simulation.planet_k2q
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
 
 
 def test_missing_attributes_raise_attribute_error(monkeypatch, tmp_path):

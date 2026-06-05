@@ -3,11 +3,6 @@ import logging
 import functools
 import numpy as np
 
-import matplotlib.collections as mcoll
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-import matplotlib.colors as mcolors
-
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +28,8 @@ def make_rgb_colormap():
     seq: a sequence of floats and RGB-tuples. The floats should be increasing
     and in the interval (0,1).
     """
+    import matplotlib.colors as mcolors
+
     c = mcolors.ColorConverter().to_rgb
     seq = [c('lavender'), c('lightblue'), 0.08, c('lightblue'), c('blue'), 0.2, c('blue'), c('green'),
            0.4, c('green'), c('orange'), 0.6, c('orange'), c('red'), 1.0, c('red')]
@@ -53,6 +50,9 @@ def colorline(x, y, z=None, cmap='copper', linewidth=2, alpha=1.0):
     Plot a colored line with coordinates x and y. Optionally specify colors in the array z
     Optionally specify a colormap, a norm function and a line width
     """
+    import matplotlib.collections as mcoll
+    import matplotlib.pyplot as plt
+
     # Default colors equally spaced on [0,1]:
     if z is None:
         z = np.linspace(0.0, 1.0, len(x))
@@ -93,6 +93,8 @@ def set_xaxis_limits(ax, ax1):
 
 
 def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=100):
+    import matplotlib as mpl
+
     new_cmap = mpl.colors.LinearSegmentedColormap.from_list(
         'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
         cmap(np.linspace(minval, maxval, n)))

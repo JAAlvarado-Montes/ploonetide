@@ -2,14 +2,12 @@
 import os
 import numpy as np
 import astropy.units as u
-import matplotlib.pyplot as plt
 
 from collections import namedtuple
 from tqdm.auto import tqdm
 from typing import Union, Literal
 
 from ploonetide.utils.constants import *
-from ploonetide.utils import make_rgb_colormap
 
 ArrayLike = Union[float, np.ndarray]
 
@@ -1077,6 +1075,8 @@ def plot_moon_temperature_map(
     min_temp=0.0,
     max_temp=730
 ):
+    import matplotlib.pyplot as plt
+    from ploonetide.utils import make_rgb_colormap
 
     # Definition of all letter sizes
     font = {'weight': 'normal', 'size': 15}
