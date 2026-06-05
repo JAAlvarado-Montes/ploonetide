@@ -1648,20 +1648,20 @@ class TidalSimulation(Simulation):
         """
         return os.path.basename(PACKAGEDIR)
 
-    def run(self, integration_time, timestep, t0=0):
+    def run(self, integration_time, timestep, t0=0, show_progress=False):
         """Run the simulation for an integration time and time-step.
 
         Args:
             integration_time (float): Total integration time to run the simulation [s]
             timestep (float): Fixed time-steop of the simulation [s]
             t0 (int, optional): Initial time of the simulation. Default is 0 [s]
+            show_progress (bool, optional): Show integration progress.
         """
         if self.system_type == 'star-planet':
             raise NotImplementedError(
                 "star-planet integrations are pending revision and are not "
                 "enabled in this release path."
             )
-
         integrator_args = self._build_planet_moon_integrator_args(integration_time)
         events, event_names = self._build_planet_moon_events()
 
@@ -1675,7 +1675,13 @@ class TidalSimulation(Simulation):
         if self.verbose:
             print('\nStarting integration of moon orbital migration:\n')
 
-        super().run(integration_time, timestep, t0=t0, jacobian=jacobian)
+        super().run(
+            integration_time,
+            timestep,
+            t0=t0,
+            jacobian=jacobian,
+            show_progress=show_progress,
+        )
 
         self._store_planet_moon_results(event_names)
 

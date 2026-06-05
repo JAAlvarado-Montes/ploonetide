@@ -28,6 +28,46 @@ def test_simulation_uses_default_integration_method():
     assert simulation.history.y[0, -1] == pytest.approx(np.exp(-0.1), rel=1e-4)
 
 
+def test_run_can_report_progress_without_changing_solution():
+    """Progress reporting should wrap the RHS without changing integration."""
+    simulation = _configured_simulation()
+
+    class FakeProgressBar:
+        def __init__(self):
+            self.updates = []
+            self.closed = False
+
+        def update(self, value):
+            self.updates.append(value)
+
+        def close(self):
+            self.closed = True
+
+    progress_bar = FakeProgressBar()
+    simulation._make_progress_bar = lambda: progress_bar
+
+    simulation.run(0.1, 0.01, show_progress=True)
+
+    assert progress_bar.closed
+    assert sum(progress_bar.updates) > 0.0
+    assert simulation.history.success
+    assert simulation.history.y[0, -1] == pytest.approx(np.exp(-0.1), rel=1e-4)
+
+
+def test_run_does_not_build_progress_bar_when_disabled():
+    """Quiet runs should avoid progress machinery entirely."""
+    simulation = _configured_simulation()
+
+    def fail_if_called():
+        raise AssertionError("progress bar should not be created")
+
+    simulation._make_progress_bar = fail_if_called
+
+    simulation.run(0.1, 0.01)
+
+    assert simulation.history.success
+
+
 def test_integration_method_is_validated_and_normalized():
     """Accepted method names should be case-insensitive."""
     simulation = _configured_simulation()

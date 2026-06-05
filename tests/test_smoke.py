@@ -55,6 +55,45 @@ def test_valid_planet_moon_simulation_initializes(monkeypatch, tmp_path):
     assert simulation.moon_rigidity in {"fluid", "rigid"}
 
 
+def test_planet_moon_progress_is_explicitly_enabled(monkeypatch, tmp_path):
+    """TidalSimulation progress should be controlled by show_progress."""
+    monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "matplotlib"))
+
+    from ploonetide import TidalSimulation
+    from ploonetide.numerical.simulator import Simulation
+    from ploonetide.utils.constants import YEAR
+
+    simulation = TidalSimulation(
+        system_type="planet-moon",
+        planet_orbperiod=20,
+        moon_fractions=(0.5, 0.5, 0.0),
+        moon_eccentricity=0.0,
+        moon_semimaxis=2.0,
+        planet_evolution=False,
+        planet_core_dissipation=False,
+        verbose=False,
+    )
+    progress_flags = []
+
+    def fake_run(self, _t, _dt, t0=0.0, jacobian=None, show_progress=False):
+        progress_flags.append(show_progress)
+        self.history = None
+
+    monkeypatch.setattr(Simulation, "run", fake_run)
+    monkeypatch.setattr(
+        TidalSimulation,
+        "_store_planet_moon_results",
+        lambda self, event_names: None,
+    )
+
+    simulation.run(YEAR, YEAR)
+    simulation.verbose = True
+    simulation.run(YEAR, YEAR)
+    simulation.run(YEAR, YEAR, show_progress=True)
+
+    assert progress_flags == [False, False, True]
+
+
 def test_planet_k2q_property_is_silent(monkeypatch, tmp_path, capsys):
     """Property access should not write status messages to stdout."""
     monkeypatch.setenv("MPLCONFIGDIR", str(tmp_path / "matplotlib"))

@@ -6,50 +6,6 @@ from ploonetide.utils.constants import MYEAR
 
 from scipy.integrate import solve_ivp
 
-# from scipy.integrate._ivp.base import OdeSolver
-# from tqdm.auto import tqdm
-
-# === Monkey-patch OdeSolver to include tqdm progress bar ===
-
-# Save original methods
-# _original_init = OdeSolver.__init__
-# _original_step = OdeSolver.step
-
-
-# # Define patched methods
-# def _patched_init(self, fun, t0, y0, t_bound, vectorized=True, support_complex=False, **kwargs):
-#     progress_total = kwargs.pop('_progress_total', None)
-#     total_steps = progress_total if progress_total is not None else int(np.ceil(t_bound - t0))
-
-#     bar_format = '{desc}{percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} steps | {elapsed}<{remaining}'
-#     self._pbar = tqdm(
-#         desc='Computing orbital evolution: ',
-#         bar_format=bar_format,
-#         total=total_steps,
-#         initial=0
-#     )
-#     self._last_t = t0
-
-#     _original_init(self, fun, t0, y0, t_bound, vectorized, support_complex, **kwargs)
-
-
-# def _patched_step(self):
-#     _original_step(self)
-
-#     delta_t = self.t - self._last_t
-#     self._pbar.update(delta_t)  # One step per call to step()
-#     self._last_t = self.t
-
-#     if self.t >= self.t_bound:
-#         self._pbar.close()
-
-
-# # Apply patch
-# OdeSolver.__init__ = _patched_init
-# OdeSolver.step = _patched_step
-
-
-# === Variable and Simulation classes ===
 
 class Variable:
     """Define a new variable for integration.
@@ -181,7 +137,45 @@ class Simulation:
 
         return atol
 
-    def run(self, t, dt, t0=0.0, jacobian=None):
+    def _make_progress_bar(self):
+        """Create a tqdm progress bar for a single integration."""
+        from tqdm.auto import tqdm
+
+        return tqdm(
+            desc="Computing orbital evolution: ",
+            total=100.0,
+            initial=0.0,
+            unit="%",
+            bar_format=(
+                "{desc}{percentage:4.0f}%|{bar}| "
+                "{elapsed}<{remaining}"
+            ),
+        )
+
+    @staticmethod
+    def _wrap_rhs_with_progress(rhs, t_span, progress_bar):
+        """Wrap an RHS function with throttled progress updates."""
+        t_start, t_end = t_span
+        total_time = t_end - t_start
+        min_progress_step = 0.1
+        progress_state = {"last": 0.0}
+
+        def wrapped_rhs(current_t, y, *args):
+            progress = (current_t - t_start) / total_time * 100.0
+            progress = min(max(progress, 0.0), 100.0)
+            delta = progress - progress_state["last"]
+
+            if delta > 0.0 and (
+                delta >= min_progress_step or progress >= 100.0
+            ):
+                progress_bar.update(delta)
+                progress_state["last"] = progress
+
+            return rhs(current_t, y, *args)
+
+        return wrapped_rhs
+
+    def run(self, t, dt, t0=0.0, jacobian=None, show_progress=False):
         """
         Run the simulation.
 
@@ -189,15 +183,22 @@ class Simulation:
             t (float): Final time
             dt (float): Timestep
             t0 (float): Initial time (default 0.0)
+            show_progress (bool): Show a progress bar for the integration.
         """
         t, dt, t0, y0 = self._validate_run_inputs(t, dt, t0)
         self.time_step = dt
         self.total_time = t
         t_span = np.array([t0, t])  # Avoid t0=0 for stability
-        t_eval = np.arange(t_span[0], t_span[1], dt)
 
-        self.bar_fmt = '{desc}{percentage:4.0f}%|{bar}|'\
-            + ' {n_fmt}/{total_fmt} steps | {elapsed}<{remaining}'
+        progress_bar = None
+        calc_diff_eqs = self.calc_diff_eqs
+        if show_progress:
+            progress_bar = self._make_progress_bar()
+            calc_diff_eqs = self._wrap_rhs_with_progress(
+                self.calc_diff_eqs,
+                t_span,
+                progress_bar,
+            )
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
@@ -208,22 +209,25 @@ class Simulation:
             max_step = min(5.0 * MYEAR, 0.005 * total_time)
             # max_step = 0.1 * MYEAR
 
-            sols = solve_ivp(
-                self.calc_diff_eqs,
-                t_span,
-                y0,
-                method=self.integration_method,
-                rtol=1e-6,
-                atol=atol,
-                args=(self.diff_eq_kwargs, self.diff_eq_ini_conds),
-                t_eval=None,
-                dense_output=True,
-                _progress_total=len(t_eval),
-                jac=jacobian
-                if self.integration_method in ("Radau", "BDF", "LSODA")
-                else None,
-                max_step=max_step,
-                events=self.events,
-            )
+            try:
+                sols = solve_ivp(
+                    calc_diff_eqs,
+                    t_span,
+                    y0,
+                    method=self.integration_method,
+                    rtol=1e-6,
+                    atol=atol,
+                    args=(self.diff_eq_kwargs, self.diff_eq_ini_conds),
+                    t_eval=None,
+                    dense_output=True,
+                    jac=jacobian
+                    if self.integration_method in ("Radau", "BDF", "LSODA")
+                    else None,
+                    max_step=max_step,
+                    events=self.events,
+                )
+            finally:
+                if progress_bar is not None:
+                    progress_bar.close()
 
             self.history = sols
