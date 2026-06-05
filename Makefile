@@ -226,6 +226,7 @@ docs:
 	@echo "🔧 Building docs with sphinx-autobuild..."
 	@$(CMD) sphinx-autobuild \
 		--open-browser \
+		--watch $(SRC_DIR) \
 		--ignore "$(abspath $(API_DIR))" \
 		--ignore "$(abspath $(AUTOSUMMARY_DIR))" \
 		$(SOURCE_DIR) $(DOCS_BUILD_DIR)

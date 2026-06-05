@@ -108,9 +108,9 @@ Use `make bump` for a patch release, `make bump-minor` for a minor release, and
 
   .. code-block:: bash
 
-     sphinx-autobuild --open-browser docs/source docs/_build/html
+     sphinx-autobuild --open-browser --watch src/ploonetide docs/source docs/_build/html
 
-  It opens the browser automatically after the initial build completes and watches for changes in the documentation source. Generated API and autosummary files are ignored by the live watcher so the preview does not repeatedly reload while Sphinx is creating those files. This does **not** interfere with your existing `conf.py` or the ReadTheDocs build process.
+  It opens the browser automatically after the initial build completes and watches for changes in the documentation source and package source, including docstrings. Generated API and autosummary files are ignored by the live watcher so the preview does not repeatedly reload while Sphinx is creating those files. This does **not** interfere with your existing `conf.py` or the ReadTheDocs build process.
 
   All required documentation tools (`sphinx`, `sphinx-autobuild`, `myst-parser`, `numpydoc`) are included in the `[tool.poetry.group.dev.dependencies]` section of `pyproject.toml`, so no additional installation is necessary for contributors.
 
