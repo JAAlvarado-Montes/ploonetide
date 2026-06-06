@@ -209,8 +209,8 @@ def _sigma_cgs_to_si(sigma_cgs):
 
     Since
 
-        1 g^-1 = 1e3 kg^-1
-        1 cm^-2 = 1e4 m^-2
+        | 1 g^-1 = 1e3 kg^-1
+        | 1 cm^-2 = 1e4 m^-2
 
     we have
 
@@ -264,8 +264,8 @@ def _planet_equilibrium_sigma_si(parameters):
         planet_sigma_eq_cgs
 
     Default follows the gas-giant value used by Bolmont et al. (2025):
-        sigma = 2.006e-61 g^-1 cm^-2 s^-1
-              = 2.006e-54 kg^-1 m^-2 s^-1.
+        | sigma = 2.006e-61 g^-1 cm^-2 s^-1
+              | = 2.006e-54 kg^-1 m^-2 s^-1.
 
     Returns
     -------
@@ -338,9 +338,9 @@ def _planet_structural_k2q_components(t, op, integrator_args):
     These are the components that, in the current implementation, do not
     explicitly depend on the tidal harmonic frequency:
 
-        core
-        mantle
-        frequency-averaged inertial-wave amplitude
+        | core
+        | mantle
+        | frequency-averaged inertial-wave amplitude
 
     The inertial-wave amplitude returned here is only the structural,
     frequency-averaged value. Whether it is allowed for a specific harmonic
@@ -1373,9 +1373,9 @@ def _state_from_y(y, integrator_args, initial_conds):
         y = [op, npp, log(nm)]
 
     Optional variables are appended in this fixed order:
-        hm    = em**2    moon eccentricity squared
-        psim             planet--moon obliquity
-        hp    = ep**2    planet eccentricity squared
+        | hm    = em**2    moon eccentricity squared
+        | psim             planet--moon obliquity
+        | hp    = ep**2    planet eccentricity squared
 
     Therefore the full state is:
         y = [op, npp, log(nm), hm, psim, hp]
@@ -1518,13 +1518,13 @@ def _planet_tide_harmonics_and_brackets(
         RHS.
 
     This is the generic b-branch used for both:
-    - b = moon: n_orb = nm,  ecc = em, psi = psim
-    - b = star: n_orb = npp, ecc = ep, psi = psis
+    | - b = moon: n_orb = nm,  ecc = em, psi = psim
+    | - b = star: n_orb = npp, ecc = ep, psi = psis
 
     The returned brackets correspond to:
-        orbit_bracket -> B_n,b
-        ecc_bracket   -> B_h,b
-        spin_bracket  -> B_Omega,b
+        | orbit_bracket -> B_n,b
+        | ecc_bracket   -> B_h,b
+        | spin_bracket  -> B_Omega,b
 
     Returns
     -------
@@ -2333,9 +2333,9 @@ def near_synchronization(y, sync_rtol=1e-8):
         Relative tolerance used to detect near-synchronous spin-orbit states.
 
     State vector:
-        y[0] = op
-        y[1] = npp
-        y[2] = log(nm)
+        | y[0] = op
+        | y[1] = npp
+        | y[2] = log(nm)
 
     Returns
     -------
@@ -2371,14 +2371,14 @@ def jacobian(t, y, integrator_args, initial_conds):
         Initial-condition dictionary passed to finite-difference fallback.
 
     State vector:
-        y[0] = op
-        y[1] = npp
-        y[2] = log(nm)
+        | y[0] = op
+        | y[1] = npp
+        | y[2] = log(nm)
 
     RHS vector:
-        f[0] = dop/dt
-        f[1] = dnp/dt
-        f[2] = dlog(nm)/dt
+        | f[0] = dop/dt
+        | f[1] = dnp/dt
+        | f[2] = dlog(nm)/dt
 
     Returns
     -------
