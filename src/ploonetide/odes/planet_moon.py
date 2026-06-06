@@ -18,7 +18,7 @@ Important implementation choices
    em = 0, psim = 0, no moon dissipation, no moment-of-inertia term, and
    the current mass approximations are used.
 4. near_synchronization(), finite_difference_jacobian(), and jacobian()
-   are intentionally kept unchanged below, as requested.
+   are intentionally kept mathematically unchanged below.
 """
 
 import numpy as np
@@ -31,7 +31,23 @@ from ploonetide.utils.constants import GCONST
 # Small utilities
 # -----------------------------------------------------------------------------
 def _flag(physics_flags, names, default=False):
-    """Return True if any of the alias names is active in physics_flags."""
+    """Return whether any alias flag is active.
+
+    Parameters
+    ----------
+    physics_flags : dict
+        Dictionary of boolean physics switches.
+    names : str or iterable of str
+        Flag name, or aliases for the same physical option.
+    default : bool, optional
+        Value returned when none of the aliases are present.
+
+    Returns
+    -------
+    bool
+        ``True`` if the first available alias evaluates to true, otherwise
+        ``False`` or the supplied default.
+    """
     if isinstance(names, str):
         names = (names,)
 
@@ -43,7 +59,23 @@ def _flag(physics_flags, names, default=False):
 
 
 def _first_available(*dicts, keys, default=None):
-    """Get the first available key from a list of dictionaries."""
+    """Return the first available value from several dictionaries.
+
+    Parameters
+    ----------
+    *dicts : dict
+        Dictionaries searched in the order supplied. Non-dictionaries are
+        skipped.
+    keys : iterable of str
+        Candidate keys searched inside each dictionary.
+    default : object, optional
+        Value returned if none of the keys are found.
+
+    Returns
+    -------
+    object
+        The first matching value, or ``default`` when all lookups fail.
+    """
     for dictionary in dicts:
         if not isinstance(dictionary, dict):
             continue
@@ -55,6 +87,22 @@ def _first_available(*dicts, keys, default=None):
 
 def _tidal_sign(omega, reference_frequency, parameters, physics_flags, *, smooth=False):
     """Signed tidal response for one tidal harmonic.
+
+    Parameters
+    ----------
+    omega : float
+        Tidal harmonic frequency.
+    reference_frequency : float
+        Characteristic orbital frequency used to scale the smoothing width
+        when ``parameters["omega_smooth"]`` is absent.
+    parameters : dict
+        Runtime model parameters.
+    physics_flags : dict
+        Physics-switch dictionary. Currently accepted for API consistency
+        with the dissipation helpers.
+    smooth : bool, optional
+        If ``True``, use a hyperbolic-tangent transition instead of a hard
+        CPL sign.
 
     If ``smooth=False``, this returns the discontinuous CPL sign,
     ``np.sign(omega)``.
@@ -76,6 +124,11 @@ def _tidal_sign(omega, reference_frequency, parameters, physics_flags, *, smooth
         parameters["tidal_sign_smoothing_fraction"] * reference_frequency.
 
     Important: this must use ``np.tanh`` rather than ``np.tan``.
+
+    Returns
+    -------
+    float
+        Signed response factor for the harmonic.
     """
     if not smooth:
         return np.sign(omega)
@@ -94,18 +147,43 @@ def _tidal_sign(omega, reference_frequency, parameters, physics_flags, *, smooth
 def _smooth_tidal_signs(parameters):
     """Whether to smooth signed tidal harmonics.
 
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters. The optional ``smooth_tidal_signs`` key
+        controls the switch.
+
     Default is True because hard sign flips at synchronization surfaces
     make adaptive solvers stall. Set
 
         parameters["smooth_tidal_signs"] = False
 
     only when you deliberately want the discontinuous CPL limit.
+
+    Returns
+    -------
+    bool
+        ``True`` when harmonic signs should be regularized.
     """
     return bool(parameters.get("smooth_tidal_signs", True))
 
 
 def _planet_properties(t, integrator_args):
-    """Return the planet mass and radius at time t."""
+    """Return the planet mass and radius at integration time ``t``.
+
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    integrator_args : dict
+        Solver context containing ``parameters`` and, when planet evolution
+        is enabled, ``planet_track``.
+
+    Returns
+    -------
+    tuple of float
+        Planet mass ``Mp`` and radius ``Rp`` in SI units.
+    """
     parameters = integrator_args["parameters"]
     physics_flags = parameters["physics_flags"]
     planet_fixed_properties = parameters["planet_fixed_properties"]
@@ -124,6 +202,11 @@ def _planet_properties(t, integrator_args):
 def _sigma_cgs_to_si(sigma_cgs):
     """Convert sigma from g^-1 cm^-2 s^-1 to kg^-1 m^-2 s^-1.
 
+    Parameters
+    ----------
+    sigma_cgs : float
+        Equilibrium-tide dissipation constant in cgs units.
+
     Since
 
         1 g^-1 = 1e3 kg^-1
@@ -132,6 +215,11 @@ def _sigma_cgs_to_si(sigma_cgs):
     we have
 
         1 g^-1 cm^-2 s^-1 = 1e7 kg^-1 m^-2 s^-1.
+
+    Returns
+    -------
+    float
+        Equivalent sigma value in SI units.
     """
     return 1.0e7 * sigma_cgs
 
@@ -139,17 +227,36 @@ def _sigma_cgs_to_si(sigma_cgs):
 def _equilibrium_tide_k2q_from_sigma(sigma_si, radius, omega):
     """Positive k2/Q amplitude for a CTL equilibrium tide.
 
+    Parameters
+    ----------
+    sigma_si : float
+        Equilibrium-tide dissipation constant in SI units.
+    radius : float
+        Radius of the dissipating body in metres.
+    omega : float
+        Tidal harmonic frequency.
+
     For the sigma-based constant-time-lag prescription,
 
         k2/Q ~= 3 sigma R^5 |omega| / G.
 
     The sign of the harmonic is applied separately by _tidal_sign().
+
+    Returns
+    -------
+    float
+        Positive ``k2/Q`` amplitude for the harmonic.
     """
     return 3.0 * sigma_si * radius**5 * abs(omega) / GCONST
 
 
 def _planet_equilibrium_sigma_si(parameters):
     """Return the planet equilibrium-tide sigma in SI units.
+
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters.
 
     User may provide either:
         planet_sigma_eq_si
@@ -159,6 +266,11 @@ def _planet_equilibrium_sigma_si(parameters):
     Default follows the gas-giant value used by Bolmont et al. (2025):
         sigma = 2.006e-61 g^-1 cm^-2 s^-1
               = 2.006e-54 kg^-1 m^-2 s^-1.
+
+    Returns
+    -------
+    float
+        Planet equilibrium-tide sigma in SI units.
     """
     if "planet_sigma_eq_si" in parameters:
         return parameters["planet_sigma_eq_si"]
@@ -170,8 +282,22 @@ def _planet_equilibrium_sigma_si(parameters):
 def _moon_equilibrium_sigma_si(parameters, initial_conds):
     """Return the moon equilibrium-tide sigma in SI units.
 
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters.
+    initial_conds : dict
+        Initial-condition dictionary, also searched for legacy moon sigma
+        aliases.
+
     The moon should have its own sigma. The planet value should not be
     silently reused because sigma encodes the body's internal dissipation.
+
+    Returns
+    -------
+    float or None
+        Moon equilibrium-tide sigma in SI units, or ``None`` when no moon
+        sigma is provided.
     """
     sigma_si = _first_available(
         parameters,
@@ -199,6 +325,16 @@ def _moon_equilibrium_sigma_si(parameters, initial_conds):
 def _planet_structural_k2q_components(t, op, integrator_args):
     """Return frequency-independent positive planet k2/Q components.
 
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    op : float
+        Planet spin angular frequency.
+    integrator_args : dict
+        Solver context containing model parameters and optional evolution
+        tracks.
+
     These are the components that, in the current implementation, do not
     explicitly depend on the tidal harmonic frequency:
 
@@ -209,6 +345,12 @@ def _planet_structural_k2q_components(t, op, integrator_args):
     The inertial-wave amplitude returned here is only the structural,
     frequency-averaged value. Whether it is allowed for a specific harmonic
     is checked later through the inertial-range condition.
+
+    Returns
+    -------
+    dict
+        Positive ``k2/Q`` components with keys ``"core"``, ``"mantle"``,
+        and ``"iw"``.
     """
     parameters = integrator_args["parameters"]
     physics_flags = parameters["physics_flags"]
@@ -266,18 +408,40 @@ def _planet_structural_k2q_components(t, op, integrator_args):
 def _inertial_wave_allowed(omega, op):
     """Return True if one harmonic lies inside the inertial-wave range.
 
+    Parameters
+    ----------
+    omega : float
+        Tidal harmonic frequency.
+    op : float
+        Planet spin angular frequency.
+
     In a rotating convective region, inertial waves are excited only when
 
         |omega| <= 2 |Omega|.
 
     For the circular semi-diurnal tide omega0 = 2(Omega - n), this reduces
     to n <= 2 Omega for positive Omega and n.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``|omega| <= 2 |op|``.
     """
     return abs(omega) <= 2.0 * abs(op)
 
 
 def _inertial_wave_gate_weight(omega, op, parameters):
     """Smooth activation weight for inertial-wave dissipation.
+
+    Parameters
+    ----------
+    omega : float
+        Tidal harmonic frequency.
+    op : float
+        Planet spin angular frequency.
+    parameters : dict
+        Runtime parameters. ``iw_gate_smoothing_fraction`` controls the
+        width of the transition.
 
     The physical inertial-wave range is
 
@@ -311,6 +475,22 @@ def _inertial_wave_gate_weight(omega, op, parameters):
 
 
 def _iw_body_is_active(body, parameters):
+    """Return whether inertial waves apply to a tide-raising body.
+
+    Parameters
+    ----------
+    body : {"moon", "star", str}
+        Body raising the tide on the planet. Unknown bodies default to active.
+    parameters : dict
+        Runtime model parameters containing optional body-specific envelope
+        switches.
+
+    Returns
+    -------
+    bool
+        ``True`` when the planet-envelope inertial-wave contribution is
+        allowed for ``body``.
+    """
     if body == "moon":
         return bool(parameters.get("planet_envelope_dissipation_for_moon", True))
 
@@ -330,6 +510,19 @@ def _planet_positive_k2q_for_harmonic(
 ):
     """Positive planet k2/Q amplitude for one tidal harmonic.
 
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    op : float
+        Planet spin angular frequency.
+    omega : float
+        Tidal harmonic frequency.
+    integrator_args : dict
+        Solver context containing model parameters and planet properties.
+    body : str, optional
+        Tide-raising body label used by body-specific inertial-wave switches.
+
     This is the harmonic-aware dissipation layer.
 
     Components:
@@ -338,6 +531,17 @@ def _planet_positive_k2q_for_harmonic(
     - equilibrium tide, proportional to |omega|;
     - frequency-averaged inertial waves, included only if the harmonic lies
       inside the inertial-wave excitation range.
+
+    Returns
+    -------
+    float
+        Positive planet ``k2/Q`` amplitude for the harmonic.
+
+    Raises
+    ------
+    ValueError
+        If a fixed planet ``k2/Q`` value is requested together with active
+        physical dissipation channels while strict flag checking is enabled.
     """
     parameters = integrator_args["parameters"]
     physics_flags = parameters["physics_flags"]
@@ -475,11 +679,33 @@ def _signed_planet_k2q_for_harmonic(
 ):
     """Signed harmonic dissipation factor K_j.
 
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    op : float
+        Planet spin angular frequency.
+    omega : float
+        Tidal harmonic frequency.
+    reference_frequency : float
+        Frequency scale used by optional sign smoothing.
+    integrator_args : dict
+        Solver context containing parameters and planet properties.
+    smooth : bool, optional
+        If ``True``, smooth the sign reversal near ``omega = 0``.
+    body : str, optional
+        Tide-raising body label passed through to the positive ``k2/Q`` helper.
+
     This returns
 
         K_j = S(omega_j) * (k2/Q)_p,j,
 
     where the positive amplitude is evaluated for the specific harmonic.
+
+    Returns
+    -------
+    float
+        Signed dissipation factor for the harmonic.
     """
     parameters = integrator_args["parameters"]
     physics_flags = parameters["physics_flags"]
@@ -527,9 +753,23 @@ def _signed_planet_k2q_for_harmonic(
 def _planet_total_k2q(t, op, integrator_args):
     """Legacy positive planet k2/Q amplitude.
 
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    op : float
+        Planet spin angular frequency.
+    integrator_args : dict
+        Solver context containing parameters and planet properties.
+
     Kept for backwards compatibility and diagnostics. The coupled RHS should
     now use _planet_positive_k2q_for_harmonic() instead, because equilibrium
     tides and inertial-wave activation are harmonic-dependent.
+
+    Returns
+    -------
+    float
+        Frequency-independent positive planet ``k2/Q`` amplitude.
     """
     parameters = integrator_args["parameters"]
     physics_flags = parameters["physics_flags"]
@@ -543,7 +783,19 @@ def _planet_total_k2q(t, op, integrator_args):
 
 
 def _use_exact_orbital_masses(parameters):
-    """Whether to use G(Mp+Mb) instead of the historical dominant-mass limit."""
+    """Return whether exact two-body masses are used in Kepler factors.
+
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters containing ``physics_flags``.
+
+    Returns
+    -------
+    bool
+        ``True`` when Kepler's law should use ``G(Mp + Mb)`` instead of
+        the historical dominant-mass approximation.
+    """
     physics_flags = parameters["physics_flags"]
     return _flag(
         physics_flags,
@@ -555,9 +807,24 @@ def _use_exact_orbital_masses(parameters):
 def _planet_moment_inertia_coeff(parameters):
     """Return the planet moment-of-inertia coefficient alpha_p.
 
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters.
+
     The main class currently provides this as
     ``planet_moment_inertia_coeff``. The fallback to the legacy
     ``planet_GR_coeff`` keeps old circular runs working.
+
+    Returns
+    -------
+    float
+        Dimensionless moment-of-inertia coefficient.
+
+    Raises
+    ------
+    KeyError
+        If neither the modern nor legacy coefficient key is available.
     """
     coeff = parameters.get(
         "planet_moment_inertia_coeff",
@@ -574,11 +841,29 @@ def _planet_moment_inertia_coeff(parameters):
 def _kepler_mass(body, Mp, Mb, parameters):
     """Mass entering Kepler's third law for the selected orbit.
 
+    Parameters
+    ----------
+    body : {"moon", "star", str}
+        Orbit identifier. ``"star"`` means the planet-star orbit; other
+        values use the moon branch.
+    Mp : float
+        Planet mass.
+    Mb : float
+        Tide-raising body mass: moon mass for the moon branch or star mass
+        for the star branch.
+    parameters : dict
+        Runtime model parameters.
+
     Default behaviour preserves the previous Ploonetide approximations:
     - moon orbit:  a_m^3 n_m^2 ~= G Mp
     - planet orbit: a_p^3 n_p^2 ~= G Ms
 
     Set use_exact_orbital_masses=True to use G(Mp + Mb).
+
+    Returns
+    -------
+    float
+        Mass term used in ``a^3 n^2 = G M``.
     """
     if _use_exact_orbital_masses(parameters):
         return Mp + Mb
@@ -590,17 +875,54 @@ def _kepler_mass(body, Mp, Mb, parameters):
 
 
 def _radius_factor(R_body, n_orb, M_kepler):
-    """Return (R_body/a)^5 written in terms of n_orb."""
+    """Return ``(R_body / a)^5`` written in terms of mean motion.
+
+    Parameters
+    ----------
+    R_body : float
+        Radius of the dissipating body.
+    n_orb : float
+        Orbital mean motion.
+    M_kepler : float
+        Mass term entering Kepler's third law.
+
+    Returns
+    -------
+    float
+        Dimensionless fifth-power radius-to-orbit factor.
+    """
     return R_body**5 * n_orb**(10.0 / 3.0) / (GCONST * M_kepler)**(5.0 / 3.0)
 
 
 def _spin_torque_factor(body, Mb, n_orb, Mp, Rp, GR, parameters):
     """Return G Mb^2 Rp^5/(Ip a^6), written in the current code's variables.
 
+    Parameters
+    ----------
+    body : {"moon", "star", str}
+        Orbit identifier. ``"star"`` selects the planet-star approximation.
+    Mb : float
+        Tide-raising body mass.
+    n_orb : float
+        Orbital mean motion.
+    Mp : float
+        Planet mass.
+    Rp : float
+        Planet radius.
+    GR : float
+        Planet moment-of-inertia coefficient.
+    parameters : dict
+        Runtime model parameters.
+
     With the default mass approximations this exactly preserves the old
     circular expressions:
     - moon:  Mm^2 Rp^3 n_m^4 / (GR G Mp^3)
     - star:  Rp^3 n_p^4 / (GR G Mp)
+
+    Returns
+    -------
+    float
+        Spin-torque prefactor used in the planet-spin equation.
     """
     if _use_exact_orbital_masses(parameters):
         return Mb**2 * Rp**3 * n_orb**4 / (GR * GCONST * Mp * (Mp + Mb)**2)
@@ -612,13 +934,57 @@ def _spin_torque_factor(body, Mb, n_orb, Mp, Rp, GR, parameters):
 
 
 def _semi_major_axis_from_n(body, n_orb, Mp, Mb, parameters):
-    """Recover a from n through Kepler's third law."""
+    """Recover semimajor axis from mean motion.
+
+    Parameters
+    ----------
+    body : {"moon", "star", str}
+        Orbit identifier passed to _kepler_mass().
+    n_orb : float
+        Orbital mean motion.
+    Mp : float
+        Planet mass.
+    Mb : float
+        Tide-raising body mass.
+    parameters : dict
+        Runtime model parameters.
+
+    Returns
+    -------
+    float
+        Semimajor axis inferred from Kepler's third law.
+    """
     mkep = _kepler_mass(body, Mp, Mb, parameters)
     return (GCONST * mkep / n_orb**2) ** (1.0 / 3.0)
 
 
 def _lambda_obliquity(body, n_orb, Mb, op, Mp, Rp, GR, parameters):
-    """Angular-momentum ratio entering the Ferraz-Mello obliquity equation."""
+    """Return the angular-momentum ratio in the obliquity equation.
+
+    Parameters
+    ----------
+    body : {"moon", "star", str}
+        Orbit identifier passed to the Kepler-mass helper.
+    n_orb : float
+        Orbital mean motion.
+    Mb : float
+        Tide-raising body mass.
+    op : float
+        Planet spin angular frequency.
+    Mp : float
+        Planet mass.
+    Rp : float
+        Planet radius.
+    GR : float
+        Planet moment-of-inertia coefficient.
+    parameters : dict
+        Runtime model parameters.
+
+    Returns
+    -------
+    float
+        Ferraz-Mello ``Lambda`` ratio. Returns 0 for zero-mass perturbers.
+    """
     if abs(Mb) <= 0.0:
         return 0.0
 
@@ -630,9 +996,28 @@ def _lambda_obliquity(body, n_orb, Mb, op, Mp, Rp, GR, parameters):
 def _track_derivative(track, quantity, t, parameters):
     """Best-effort derivative of a planet-track quantity.
 
+    Parameters
+    ----------
+    track : object
+        Planet-evolution track object.
+    quantity : {"R", "M"}
+        Track quantity whose time derivative is requested.
+    t : float
+        Track time at which the derivative is evaluated.
+    parameters : dict
+        Runtime parameters. ``planet_track_derivative_step`` may override
+        the finite-difference step.
+
     The preferred route is an explicit derivative method on the track. If no
     derivative is available, a small finite-difference estimate is used. This
-    helper is used when planet_evolution=True and the track does not provide derivatives.
+    helper is used when planet_evolution=True and the track does not provide
+    derivatives.
+
+    Returns
+    -------
+    float
+        Estimated derivative, or 0 if neither direct nor finite-difference
+        evaluation succeeds.
     """
     derivative_names = {
         "R": ("dRdt", "Rdot", "R_dot", "dR_dt", "dR"),
@@ -661,6 +1046,16 @@ def _track_derivative(track, quantity, t, parameters):
 def _planet_moment_inertia_log_derivative(t, op, integrator_args):
     """Return dln(Ip)/dt for Ip = alpha_p Mp Rp^2.
 
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    op : float
+        Planet spin angular frequency. Accepted for interface symmetry with
+        the spin equation; the current structural term does not use it.
+    integrator_args : dict
+        Solver context containing parameters and the optional planet track.
+
     This reuses the existing ``planet_evolution`` flag. If the planet radius
     evolves through the planetary track, the planet moment of inertia evolves
     too. For now we keep alpha_p and Mp fixed in this structural term, so
@@ -669,6 +1064,11 @@ def _planet_moment_inertia_log_derivative(t, op, integrator_args):
 
     The track currently supplies R(t), not necessarily Rdot(t), so Rdot is
     estimated internally when no derivative method is available.
+
+    Returns
+    -------
+    float
+        Logarithmic time derivative of the planet moment of inertia.
     """
     parameters = integrator_args["parameters"]
     physics_flags = parameters["physics_flags"]
@@ -692,9 +1092,25 @@ def _planet_moment_inertia_log_derivative(t, op, integrator_args):
 def _moon_dissipation_is_active(parameters, initial_conds, eccm=None):
     """Return True if moon tides should contribute to the ODEs.
 
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters and physics flags.
+    initial_conds : dict
+        Initial-condition dictionary searched for legacy moon properties.
+    eccm : float, optional
+        Current moon eccentricity. If absent, the initial eccentricity is
+        used.
+
     Moon dissipation is dynamically relevant only if the moon has an
     eccentricity or spin-obliquity tide to damp. The enabled mechanism
     is controlled separately by flags such as moon_equilibrium_tide.
+
+    Returns
+    -------
+    bool
+        ``True`` when a moon dissipation prescription is enabled and the
+        moon has eccentricity or obliquity above the configured floors.
     """
     physics_flags = parameters["physics_flags"]
 
@@ -734,11 +1150,26 @@ def _moon_dissipation_is_active(parameters, initial_conds, eccm=None):
 def _moon_radius_and_k2q(parameters, initial_conds, nm=None):
     """Return moon radius and k2/Q amplitude for optional moon dissipation.
 
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters.
+    initial_conds : dict
+        Initial-condition dictionary searched for moon-radius and ``k2/Q``
+        aliases.
+    nm : float, optional
+        Moon mean motion. Required to add a CTL equilibrium-tide contribution.
+
     If a fixed moon_k2q is provided, it is used directly.
 
     If moon equilibrium tides are enabled and a moon sigma is provided,
     the CTL value is added using the synchronously rotating eccentric
     annual mode, omega ~= n_m.
+
+    Returns
+    -------
+    tuple of float
+        Moon radius and positive moon ``k2/Q`` amplitude.
     """
     physics_flags = parameters["physics_flags"]
     planet_fixed_properties = parameters["planet_fixed_properties"]
@@ -783,6 +1214,20 @@ def _moon_radius_and_k2q(parameters, initial_conds, nm=None):
 
 
 def _moon_spin_obliquity(parameters, initial_conds):
+    """Return the moon spin obliquity used in moon dissipation.
+
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters.
+    initial_conds : dict
+        Initial-condition dictionary searched for legacy aliases.
+
+    Returns
+    -------
+    float
+        Moon spin obliquity in radians, defaulting to 0.
+    """
     return _first_available(
         parameters,
         initial_conds,
@@ -792,6 +1237,21 @@ def _moon_spin_obliquity(parameters, initial_conds):
 
 
 def _stellar_obliquity(parameters, initial_conds):
+    """Return the stellar-branch obliquity for planet-star tides.
+
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters.
+    initial_conds : dict
+        Initial-condition dictionary searched for legacy aliases.
+
+    Returns
+    -------
+    float
+        Obliquity between the planet spin and planet-star orbital plane in
+        radians, defaulting to 0.
+    """
     return _first_available(
         parameters,
         initial_conds,
@@ -803,8 +1263,20 @@ def _stellar_obliquity(parameters, initial_conds):
 def _initial_obliquity(parameters, initial_conds):
     """Return initial planet--moon obliquity in radians.
 
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters.
+    initial_conds : dict
+        Initial-condition dictionary searched for obliquity aliases.
+
     User-facing code may store the degree value elsewhere, but the ODE layer
     always works in radians.
+
+    Returns
+    -------
+    float
+        Initial planet--moon obliquity in radians.
     """
     return _first_available(
         parameters,
@@ -823,8 +1295,20 @@ def _initial_obliquity(parameters, initial_conds):
 def _initial_moon_eccentricity(parameters, initial_conds):
     """Return initial moon orbital eccentricity.
 
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters.
+    initial_conds : dict
+        Initial-condition dictionary searched for eccentricity aliases.
+
     This is the eccentricity of the moon orbit around the planet. The ODE
     layer evolves hm = em**2.
+
+    Returns
+    -------
+    float
+        Initial moon orbital eccentricity.
     """
     return _first_available(
         parameters,
@@ -843,8 +1327,20 @@ def _initial_moon_eccentricity(parameters, initial_conds):
 def _initial_planet_eccentricity(parameters, initial_conds):
     """Return initial planet--star orbital eccentricity.
 
+    Parameters
+    ----------
+    parameters : dict
+        Runtime model parameters.
+    initial_conds : dict
+        Initial-condition dictionary searched for eccentricity aliases.
+
     This is the eccentricity of the planet orbit around the star. The ODE
     layer evolves hp = ep**2.
+
+    Returns
+    -------
+    float
+        Initial planet--star orbital eccentricity.
     """
     return _first_available(
         parameters,
@@ -863,6 +1359,16 @@ def _initial_planet_eccentricity(parameters, initial_conds):
 def _state_from_y(y, integrator_args, initial_conds):
     """Parse the planet--moon state vector.
 
+    Parameters
+    ----------
+    y : array-like
+        Current ODE state vector.
+    integrator_args : dict
+        Solver context containing runtime parameters.
+    initial_conds : dict
+        Initial-condition dictionary used to decide which optional state
+        variables are active.
+
     Base circular/coplanar state:
         y = [op, npp, log(nm)]
 
@@ -877,6 +1383,17 @@ def _state_from_y(y, integrator_args, initial_conds):
     The orchestrator supplies the physical initial values em_ini, ep_ini,
     and psim_ini, and builds the ODE state using hm_ini=em_ini**2 and
     hp_ini=ep_ini**2.
+
+    Returns
+    -------
+    dict
+        Parsed state values, physical eccentricities, squared eccentricity
+        variables, and booleans describing which optional states are active.
+
+    Raises
+    ------
+    ValueError
+        If ``y`` does not match the expected optional-state layout.
     """
     y = np.asarray(y, dtype=float)
     parameters = integrator_args["parameters"]
@@ -980,6 +1497,26 @@ def _planet_tide_harmonics_and_brackets(
 ):
     """Return signed harmonics and Ferraz-Mello brackets for a tide on the planet.
 
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    op : float
+        Planet spin angular frequency.
+    n_orb : float
+        Orbital mean motion for the tide-raising body.
+    ecc : float
+        Orbital eccentricity for this branch.
+    psi : float
+        Obliquity angle for this branch.
+    integrator_args : dict
+        Solver context containing parameters and planet properties.
+    body : str, optional
+        Tide-raising body label used for body-specific dissipation switches.
+    extended_active : bool, optional
+        Whether eccentric or oblique state variables are active in the coupled
+        RHS.
+
     This is the generic b-branch used for both:
     - b = moon: n_orb = nm,  ecc = em, psi = psim
     - b = star: n_orb = npp, ecc = ep, psi = psis
@@ -988,6 +1525,13 @@ def _planet_tide_harmonics_and_brackets(
         orbit_bracket -> B_n,b
         ecc_bracket   -> B_h,b
         spin_bracket  -> B_Omega,b
+
+    Returns
+    -------
+    tuple
+        ``(orbit_bracket, ecc_bracket, spin_bracket, harmonics)`` where
+        ``harmonics`` contains the signed ``K`` factors and their
+        corresponding frequencies.
     """
     parameters = integrator_args["parameters"]
 
@@ -1125,9 +1669,37 @@ def _rhs_components(
 ):
     """Compute the coupled RHS terms for the planet--moon problem.
 
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    op : float
+        Planet spin angular frequency.
+    npp : float
+        Planet mean motion around the star.
+    log_nm : float
+        Natural logarithm of the moon mean motion.
+    eccm : float
+        Moon orbital eccentricity.
+    psim : float
+        Obliquity between the planet spin and moon orbital plane.
+    eccp : float
+        Planet-star orbital eccentricity.
+    integrator_args : dict
+        Solver context containing parameters and optional planet track.
+    initial_conds : dict
+        Initial-condition dictionary used for moon and obliquity aliases.
+
     The planet tide terms follow the signed-k2/Q version of the
     Ferraz-Mello et al. (2008) second-order equations. With e=0 and
     psi=0 they reduce to the old Barnes/O'Brien/Sasaki circular branch.
+
+    Returns
+    -------
+    dict
+        RHS components for planet spin, planet mean motion, moon mean motion,
+        squared eccentricity variables, physical eccentricity diagnostics, and
+        planet--moon obliquity.
     """
     parameters = integrator_args["parameters"]
 
@@ -1416,8 +1988,24 @@ def _rhs_components(
 def dnmdt(t, y, integrator_args, initial_conds):
     """Differential equation for log(nm).
 
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    y : array-like
+        Single-entry state vector containing ``log(nm)``.
+    integrator_args : dict
+        Solver context containing parameters and planet properties.
+    initial_conds : dict
+        Initial-condition dictionary passed to the shared RHS assembler.
+
     This wrapper is kept for compatibility with the original file. The
     actual physics is assembled in _rhs_components().
+
+    Returns
+    -------
+    list
+        Single-entry list containing ``dlog(nm)/dt``.
     """
     y = np.asarray(y, dtype=float)
     parameters = integrator_args["parameters"]
@@ -1446,8 +2034,24 @@ def dnmdt(t, y, integrator_args, initial_conds):
 def demdt(t, y, integrator_args, initial_conds):
     """Differential equation for the physical moon eccentricity em.
 
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    y : array-like
+        Single-entry state vector containing ``em``.
+    integrator_args : dict
+        Solver context containing parameters and planet properties.
+    initial_conds : dict
+        Initial-condition dictionary passed to the shared RHS assembler.
+
     This compatibility wrapper still returns dem/dt if called directly.
     The coupled solver below evolves hm = em**2 instead.
+
+    Returns
+    -------
+    list
+        Single-entry list containing ``dem/dt``.
     """
     y = np.asarray(y, dtype=float)
     parameters = integrator_args["parameters"]
@@ -1476,9 +2080,25 @@ def demdt(t, y, integrator_args, initial_conds):
 def dhmdt(t, y, integrator_args, initial_conds):
     """Differential equation for hm = em**2.
 
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    y : array-like
+        Single-entry state vector containing ``hm``.
+    integrator_args : dict
+        Solver context containing parameters and planet properties.
+    initial_conds : dict
+        Initial-condition dictionary passed to the shared RHS assembler.
+
     This is the eccentricity variable used by solution_planet_moon() when
     eccentricity is active. The physical eccentricity is recovered as
     em = sqrt(max(hm, 0)).
+
+    Returns
+    -------
+    list
+        Single-entry list containing ``dhm/dt``.
     """
     y = np.asarray(y, dtype=float)
     parameters = integrator_args["parameters"]
@@ -1506,7 +2126,24 @@ def dhmdt(t, y, integrator_args, initial_conds):
 
 
 def dpsimdt(t, y, integrator_args, initial_conds):
-    """Differential equation for the planet-moon obliquity psim."""
+    """Differential equation for the planet--moon obliquity psim.
+
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    y : array-like
+        Single-entry state vector containing ``psim``.
+    integrator_args : dict
+        Solver context containing parameters and planet properties.
+    initial_conds : dict
+        Initial-condition dictionary passed to the shared RHS assembler.
+
+    Returns
+    -------
+    list
+        Single-entry list containing ``dpsim/dt``.
+    """
     y = np.asarray(y, dtype=float)
     parameters = integrator_args["parameters"]
 
@@ -1532,7 +2169,24 @@ def dpsimdt(t, y, integrator_args, initial_conds):
 
 
 def dopdt(t, y, integrator_args, initial_conds):
-    """Differential equation for the planet rotational rate Omega_p."""
+    """Differential equation for the planet rotational rate Omega_p.
+
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    y : array-like
+        Single-entry state vector containing ``Omega_p``.
+    integrator_args : dict
+        Solver context containing parameters and planet properties.
+    initial_conds : dict
+        Initial-condition dictionary passed to the shared RHS assembler.
+
+    Returns
+    -------
+    list
+        Single-entry list containing ``dOmega_p/dt``.
+    """
     y = np.asarray(y, dtype=float)
     parameters = integrator_args["parameters"]
 
@@ -1558,7 +2212,24 @@ def dopdt(t, y, integrator_args, initial_conds):
 
 
 def dnpdt(t, y, integrator_args, initial_conds):
-    """Differential equation for the planet mean motion n_p."""
+    """Differential equation for the planet mean motion n_p.
+
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    y : array-like
+        Single-entry state vector containing ``n_p``.
+    integrator_args : dict
+        Solver context containing parameters and planet properties.
+    initial_conds : dict
+        Initial-condition dictionary passed to the shared RHS assembler.
+
+    Returns
+    -------
+    list
+        Single-entry list containing ``dn_p/dt``.
+    """
     y = np.asarray(y, dtype=float)
     parameters = integrator_args["parameters"]
 
@@ -1590,11 +2261,28 @@ def finite_difference_jacobian(
     initial_conds,
     rel_step=None,
 ):
-    """
-    Central finite-difference Jacobian of solution_planet_moon.
+    """Central finite-difference Jacobian of solution_planet_moon.
+
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    y : array-like
+        Current coupled state vector.
+    integrator_args : dict
+        Solver context passed to solution_planet_moon().
+    initial_conds : dict
+        Initial-condition dictionary passed to solution_planet_moon().
+    rel_step : float, optional
+        Relative finite-difference step. Defaults to sqrt(machine epsilon).
 
     This is mainly useful near sign discontinuities, where the
     analytic Jacobian is not a good local linearisation.
+
+    Returns
+    -------
+    numpy.ndarray
+        Central finite-difference Jacobian with shape ``(len(y), len(y))``.
     """
     y = np.asarray(y, dtype=float)
     n = y.size
@@ -1603,6 +2291,7 @@ def finite_difference_jacobian(
         rel_step = np.sqrt(np.finfo(float).eps)
 
     def f(yy):
+        """Evaluate the coupled RHS for a perturbed state vector."""
         return np.asarray(
             solution_planet_moon(t, yy, integrator_args, initial_conds),
             dtype=float,
@@ -1633,13 +2322,26 @@ def finite_difference_jacobian(
 
 
 def near_synchronization(y, sync_rtol=1e-8):
-    """
-    Detect whether the system is close to a sign-changing tidal surface.
+    """Detect whether the system is close to a sign-changing tidal surface.
+
+    Parameters
+    ----------
+    y : array-like
+        Coupled state vector containing at least ``op``, ``npp``, and
+        ``log(nm)``.
+    sync_rtol : float, optional
+        Relative tolerance used to detect near-synchronous spin-orbit states.
 
     State vector:
         y[0] = op
         y[1] = npp
         y[2] = log(nm)
+
+    Returns
+    -------
+    bool
+        ``True`` when either the planet--moon or planet--star branch is close
+        to a sign-changing synchronization surface.
     """
     op = y[0]
     npp = y[1]
@@ -1655,8 +2357,18 @@ def near_synchronization(y, sync_rtol=1e-8):
 
 
 def jacobian(t, y, integrator_args, initial_conds):
-    """
-    Jacobian for the circular planet-moon system.
+    """Jacobian for the circular planet--moon system.
+
+    Parameters
+    ----------
+    t : float
+        Integration time in seconds.
+    y : array-like
+        Coupled state vector.
+    integrator_args : dict
+        Solver context containing parameters and planet properties.
+    initial_conds : dict
+        Initial-condition dictionary passed to finite-difference fallback.
 
     State vector:
         y[0] = op
@@ -1667,6 +2379,13 @@ def jacobian(t, y, integrator_args, initial_conds):
         f[0] = dop/dt
         f[1] = dnp/dt
         f[2] = dlog(nm)/dt
+
+    Returns
+    -------
+    numpy.ndarray
+        Analytic 3x3 circular Jacobian, or a finite-difference Jacobian when
+        smoothing, extra state variables, or near-synchronization make the
+        analytic circular form inappropriate.
     """
     y = np.asarray(y, dtype=float)
 
@@ -1872,46 +2591,55 @@ def solution_planet_moon(t, y, integrator_args, initial_conds):
     Parameters
     ----------
     t : float
-        time vector
-    y : list
-        variables vector
-    integrator_args : TYPE
-        Description
-    initial_conds : TYPE
-        Description
+        Integration time in seconds.
+    y : array-like
+        State vector. The required entries are the planet spin rate, planet
+        mean motion, and ``log(nm)``; optional eccentricity and obliquity
+        states are appended according to the initial conditions.
+    integrator_args : dict
+        Dictionary with arguments for the ``solve_ivp`` integrator, including
+        the runtime parameters and optional planet-evolution track.
+    initial_conds : dict
+        Dictionary with the ODE initial conditions.
 
     Examples
     --------
-
-    Circular state vector
+    Circular and co-planar state vector:
         | y[0] = op
         | y[1] = npp
         | y[2] = log(nm)
 
-    Eccentric state vector
+    Moon eccentric state vector:
         y[3] = hm = em**2
 
-    Obliquity-only state vector:
+    Moon obliquity-only (non-eccentric) state vector:
         y[3] = psim
 
-    Eccentric + obliquity state vector:
+    Moon eccentric + obliquity state vector:
         | y[3] = hm = em**2
         | y[4] = psim
 
+    Moon eccentric + obliquity + planet eccentric state vector:
+        | y[3] = hm = em**2
+        | y[4] = psim
+        | y[5] = hp = ep**2
+
     The returned vector always matches len(y). The eccentric component
-    is dhm/dt rather than dem/dt.
+    is dh/dt rather than de/dt.
 
     Returns
     -------
     list
-        planet-moon solutions vector
+        RHS vector for the planet--moon system, ordered to match ``y``.
 
     Raises
     ------
     FloatingPointError
-        Description
+        If any RHS entry is non-finite.
     ValueError
-        Description
+        If the returned RHS length does not match the state-vector length, or
+        if the state-vector layout is inconsistent with the requested optional
+        states.
     """
     y = np.asarray(y, dtype=float)
     parameters = integrator_args["parameters"]
